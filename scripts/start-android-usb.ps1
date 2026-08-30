@@ -78,10 +78,10 @@ $env:ANDROID_SDK_ROOT = $androidSdkDirectory
 $env:REACT_NATIVE_PACKAGER_HOSTNAME = '127.0.0.1'
 
 Write-Host "USB forwarding is active for $selectedDevice on port $Port."
-Write-Host "Keep Metro running, then press 'a' to open Expo Go at exp://127.0.0.1:$Port."
-Write-Host 'Stopping Metro makes a cold Expo Go relaunch unavailable, but does not delete local data.'
+Write-Host "Keep Metro running, then press 'a' to open the installed PicchuSpot development build."
+Write-Host 'Stopping Metro prevents the development build from loading JavaScript, but does not delete local data.'
 
-& npx.cmd expo start --lan --port $Port
+& npx.cmd expo start --dev-client --lan --port $Port
 
 if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE

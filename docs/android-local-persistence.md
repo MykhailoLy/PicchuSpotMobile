@@ -1,21 +1,87 @@
-# Android local persistence testing
+# Android development-build and local persistence testing
 
-## Stable Expo Go path over USB
+PicchuSpot Android testing uses the project-specific development build, not
+Expo Go. Its application ID is `com.picchuspot.app`, so SQLite and document
+storage live in PicchuSpot's own installed-app sandbox.
 
-For same-machine smoke testing on a physical Android device, connect and
-authorize the device over USB, then run:
+## Prerequisites on Windows
+
+Install Android Studio with the SDK Platform and SDK Build-Tools required by
+Expo SDK 57, install OpenJDK 17, then enable USB debugging on the Android
+device. From PowerShell, make the local SDK and JDK available to the current
+session. The paths below cover the standard per-user SDK and Microsoft OpenJDK
+locations; adjust them if those tools use custom directories.
+
+~~~powershell
+$androidSdk = Join-Path $env:LOCALAPPDATA 'Android\Sdk'
+$androidJdk = Get-ChildItem "$env:ProgramFiles\Microsoft" -Directory -Filter 'jdk-17*' |
+  Sort-Object Name -Descending |
+  Select-Object -First 1 -ExpandProperty FullName
+$env:ANDROID_HOME = $androidSdk
+$env:ANDROID_SDK_ROOT = $androidSdk
+$env:JAVA_HOME = $androidJdk
+$env:Path = "$androidSdk\platform-tools;$androidJdk\bin;$env:Path"
+adb devices -l
+~~~
+
+The device must be listed with state `device`. Unlock the phone and accept its
+USB debugging prompt if it is `unauthorized`.
+
+## First compile and install
+
+Install JavaScript dependencies, connect one authorized device, then let Expo
+generate the ignored native project, compile it locally and install the debug
+APK:
+
+~~~powershell
+npm.cmd install
+npx.cmd expo run:android --device
+~~~
+
+Choose the physical device when prompted. No Expo account or EAS configuration
+is required for this local build. The generated `android/` directory is a local
+CNG artifact and remains ignored; native identifiers and other durable native
+settings belong in `app.json` or Expo config plugins.
+
+Rebuild after installing or updating a native dependency, changing `app.json`
+native configuration, or upgrading Expo. To guarantee a clean regeneration:
+
+~~~powershell
+npx.cmd expo prebuild --clean --platform android
+npx.cmd expo run:android --device
+~~~
+
+Do not use `prebuild --clean` when uncommitted manual native work exists; it
+replaces the generated native directory.
+
+If Gradle reports `Unable to establish loopback connection` only inside a
+hosted Windows terminal, give that build process a short native temp path and
+retry. This works around the Windows JVM socket-path limit without changing the
+project:
+
+~~~powershell
+New-Item -ItemType Directory -Path 'C:\jtmp' -Force | Out-Null
+$env:TEMP = 'C:\jtmp'
+$env:TMP = 'C:\jtmp'
+npx.cmd expo run:android --device
+~~~
+
+## Daily USB development
+
+Once the development build is installed, connect and authorize the device over
+USB, then run:
 
 ~~~powershell
 npm.cmd run android:usb
 ~~~
 
-The script finds ADB, selects the single authorized device, configures
-`adb reverse` for port `8082`, and makes Expo advertise the USB-forwarded
-loopback address. Keep Metro running and press `a` in the Expo terminal to
-open the project at `exp://127.0.0.1:8082`.
+The helper finds ADB, selects the single authorized device, configures
+`adb reverse` for port `8082`, and starts Metro in development-client mode on
+the USB-forwarded loopback address. Keep Metro running and press `a` in the Expo
+terminal to open the installed PicchuSpot app.
 
-The Android SDK and packager settings used by the script are process-local. It
-does not edit machine, repository, or production environment configuration.
+The Android SDK and packager settings used by the helper are process-local. It
+does not edit machine, repository or production environment configuration.
 
 If more than one device is connected, select one explicitly:
 
@@ -23,62 +89,56 @@ If more than one device is connected, select one explicitly:
 npm.cmd run android:usb -- -DeviceSerial <serial>
 ~~~
 
-This path removes LAN address changes from the test. Stopping Metro means
-Expo Go cannot reopen the development bundle; that is a launch/connectivity
-failure and does not delete the SQLite database or document files.
+Stopping Metro prevents the development build from loading its JavaScript
+bundle. That is a development-server connectivity failure and does not delete
+the SQLite database or document files.
 
-## Expo Go identity and storage boundaries
+## Development-build storage boundary
 
-Expo Go is suitable for repeated persistence checks only while all of these
-remain true:
+The installed development build starts with a different Android application
+sandbox from Expo Go. Existing Expo Go test data is not expected to migrate.
 
-- the project is launched from the same development-machine Expo identity;
-- the manifest `scopeKey` is unchanged;
-- Expo Go app data has not been cleared and Expo Go has not been uninstalled;
-- Metro remains available when the development bundle is reopened.
+Inside the installed PicchuSpot app:
 
-Changing only the LAN IP or using USB localhost forwarding does not change the
-manifest `scopeKey` when the same Expo CLI identity and project slug are used.
-This repository is not linked to an EAS project, though, so Expo Go assigns an
-anonymous scope. That anonymous identity can differ on another development
-machine or after the Expo CLI global identity is reset.
+- `picchuspot-mobile.db` is the single source of truth for Shoot and media
+  metadata;
+- imported copies live under the app-scoped `Paths.document` directory in
+  `picchuspot/shoots/<shoot-id>`;
+- SQLite stores the absolute document URI for each PicchuSpot-owned image;
+- uninstalling PicchuSpot or clearing its Android app data removes this local
+  sandbox.
 
-On Android in Expo Go, the two local stores have different boundaries:
+Recompiling and reinstalling the debug APK normally preserves app data because
+the application ID and signing key are unchanged. Do not uninstall the app or
+clear its data during persistence verification.
 
-- `picchuspot-mobile.db` is opened from Expo Go's SQLite directory;
-- imported copies live under the experience-scoped `Paths.document` directory,
-  in `picchuspot/shoots/<shoot-id>`;
-- SQLite stores the absolute document URI for each owned image.
-
-If the anonymous scope changes, the new experience receives a different
-document directory. Existing files are not migrated to it, so that situation
-must not be treated as an application persistence regression.
-
-## Verification checklist
+## Physical-device acceptance checklist
 
 Use a uniquely named test Shoot and a known non-sensitive image:
 
-1. Create the Shoot and import the image.
-2. Return to Shoots, then reopen the Shoot.
-3. Reload JavaScript from the Expo Go developer menu.
-4. Fully close Expo Go while Metro remains running.
-5. Reopen the same `exp://127.0.0.1:8082` project.
-6. Confirm the Shoot and image are still present.
-7. Delete the test Shoot and confirm only its PicchuSpot-owned copy is removed.
+1. Confirm the installed app label is **PicchuSpot**.
+2. Open **Shoots**, **Orders** and **Account** and confirm each tab renders.
+3. Create the test Shoot and import the image.
+4. Return to Shoots, reopen the Shoot and confirm the image is present.
+5. Rename the Shoot, return to Shoots and reopen the renamed Shoot.
+6. Reload JavaScript from the development menu and confirm the Shoot and image
+   remain present.
+7. Force-stop PicchuSpot, restart Metro, reconnect USB, launch PicchuSpot from
+   the Home screen and confirm the Shoot and image remain present.
+8. Disconnect and reconnect the device, restore `adb reverse` with
+   `npm.cmd run android:usb`, and confirm the Shoot remains present.
+9. Remove the imported photo and confirm the Shoot remains with zero photos.
+10. Delete the test Shoot and confirm it no longer appears in Shoots. The app
+    must delete only its owned copy; the original imported image remains.
 
-## When a development build is required
-
-Use Expo Go only for same-scope smoke tests. A development build is required
-before treating persistence as representative of the installed PicchuSpot app,
-or when testing across development machines. The development-build follow-up
-must first choose stable native identifiers (`android.package` and
-`ios.bundleIdentifier`), then install the SDK 57 `expo-dev-client` package and
-build the app for the device. Do not invent or change those product identifiers
-as part of a persistence test.
+Camera capture is outside this workflow until the native camera foundation is
+implemented.
 
 References:
 
 - [Expo SDK 57 SQLite](https://docs.expo.dev/versions/v57.0.0/sdk/sqlite/)
 - [Expo SDK 57 FileSystem](https://docs.expo.dev/versions/v57.0.0/sdk/filesystem/)
-- [Expo SDK 57 Constants](https://docs.expo.dev/versions/v57.0.0/sdk/constants/)
+- [Expo SDK 57 DevClient](https://docs.expo.dev/versions/v57.0.0/sdk/dev-client/)
 - [Expo development builds](https://docs.expo.dev/develop/development-builds/introduction/)
+- [Expo local app development](https://docs.expo.dev/guides/local-app-development/)
+- [Expo Continuous Native Generation](https://docs.expo.dev/workflow/continuous-native-generation/)
