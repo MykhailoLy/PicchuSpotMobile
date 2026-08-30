@@ -1,56 +1,113 @@
-# Welcome to your Expo app 👋
+# PicchuSpot Mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+PicchuSpot Mobile is the mobile companion app for PicchuSpot real-estate media services.
 
-## Get started
+The current focus is a local-first property capture workflow: create a Shoot, import or capture property media, keep it available offline, and prepare it for the existing PicchuSpot order flow.
 
-1. Install dependencies
+## Current foundation
 
-   ```bash
-   npm install
-   ```
+Implemented and physically verified on Android:
 
-2. Start the app
+- Shoots as the primary local entity
+- SQLite as the single source of truth for local Shoot and media metadata
+- PicchuSpot-owned document storage for imported media
+- multi-photo gallery import
+- persistent Shoot list with cover image and photo count
+- reopen existing Shoots
+- rename Shoots
+- remove photos without deleting gallery originals
+- delete Shoots with scoped cleanup of owned files only
+- persistence across navigation and app restarts
+- stable USB-based Expo Go testing on physical Android
 
-   ```bash
-   npx expo start
-   ```
+Native camera capture and server-backed order integration are intentionally deferred to later phases.
 
-In the output, you'll find options to open the app in a
+## Stack
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- React Native
+- Expo SDK 57
+- Expo Router
+- TypeScript
+- Expo SQLite
+- Expo FileSystem
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+The existing PicchuSpot web/backend remains the source of truth for authentication, order drafts, uploads, pricing, payments, statuses, deliverables and related production contracts.
 
-## Get a fresh project
+## Project structure
 
-When you're ready, run:
-
-```bash
-npm run reset-project
+```text
+src/app/                 Expo Router screens
+src/lib/local-shoots.ts  SQLite-backed local Shoot/media metadata
+src/lib/local-files.ts   PicchuSpot-owned local media storage
+docs/                    Product, capture and persistence architecture notes
+scripts/                  Local development helpers
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Key architecture documents:
 
-### Other setup steps
+- [Product architecture](./docs/product-architecture.md)
+- [Capture model](./docs/capture-model.md)
+- [Android local persistence testing](./docs/android-local-persistence.md)
+- [Competitor UX reference study](./docs/boxbrownie-reference-flow.md)
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## Local development
 
-## Learn more
+Install dependencies:
 
-To learn more about developing your project with Expo, look at the following resources:
+```powershell
+npm.cmd install
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Run the standard Expo development server:
 
-## Join the community
+```powershell
+npm.cmd start
+```
 
-Join our community of developers creating universal apps.
+For stable physical Android testing over USB:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```powershell
+npm.cmd run android:usb
+```
+
+The USB helper discovers an authorized Android device, configures `adb reverse` for port 8082 and starts Metro using `127.0.0.1`. See [Android local persistence testing](./docs/android-local-persistence.md) for the exact workflow and Expo Go scope limitations.
+
+## Validation
+
+Run before completing a coding task:
+
+```powershell
+npm.cmd run lint
+npx.cmd tsc --noEmit
+npx.cmd expo-doctor@latest
+```
+
+For Android bundle validation:
+
+```powershell
+npx.cmd expo export --platform android
+```
+
+Filesystem, image picker, camera and other native/device behavior must also be verified on a physical device.
+
+## Development direction
+
+Planned next steps:
+
+1. move device testing from Expo Go to a project-specific development build;
+2. establish the camera foundation;
+3. add Quick single-exposure capture;
+4. validate Balanced and Pro multi-exposure behavior on physical devices before fixing bracket counts or EV spacing;
+5. integrate with the existing PicchuSpot backend contracts for upload, order review, authentication and payment.
+
+Do not create a parallel mobile backend or duplicate server-authoritative pricing logic in the app.
+
+## Protected systems
+
+Changes affecting production Supabase data/schema, RLS, order submission/finalization, upload APIs, pricing, payments, authentication contracts, environment variables, transactional email or production deployment require explicit approval and compatibility review first.
+
+## Related project
+
+Website and production backend: [picchuspot.com](https://picchuspot.com)
+
+Web/backend repository: `MykhailoLy/real-estate-visual-studio`

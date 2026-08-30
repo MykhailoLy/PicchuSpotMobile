@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -11,6 +12,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { createLocalShoot } from '@/lib/local-shoots';
 
 const colors = {
   navy: '#071A2B',
@@ -24,21 +27,36 @@ const colors = {
 export default function NewShootScreen() {
   const [propertyName, setPropertyName] = useState('');
   const [address, setAddress] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
 
-  const canContinue = propertyName.trim().length > 0;
+  const canContinue = propertyName.trim().length > 0 && !isCreating;
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!canContinue) {
       return;
     }
 
-    router.push({
-      pathname: '/shoot-media',
-      params: {
-        propertyName: propertyName.trim(),
-        address: address.trim(),
-      },
-    });
+    setIsCreating(true);
+
+    try {
+      const shoot = await createLocalShoot(propertyName, address);
+
+      router.replace({
+        pathname: '/shoot-media',
+        params: {
+          shootId: shoot.id,
+        },
+      });
+    } catch (error) {
+      console.error(error);
+
+      Alert.alert(
+        'Could not create shoot',
+        'Please try again.',
+      );
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -85,7 +103,6 @@ export default function NewShootScreen() {
                 autoCorrect={false}
                 placeholder="Villa Alicante"
                 placeholderTextColor="#9AA2A8"
-                returnKeyType="next"
                 value={propertyName}
                 onChangeText={setPropertyName}
                 style={styles.input}
@@ -104,7 +121,6 @@ export default function NewShootScreen() {
                 autoCapitalize="words"
                 placeholder="Optional"
                 placeholderTextColor="#9AA2A8"
-                returnKeyType="done"
                 value={address}
                 onChangeText={setAddress}
                 style={styles.input}
@@ -135,7 +151,7 @@ export default function NewShootScreen() {
                 !canContinue && styles.continueTextDisabled,
               ]}
             >
-              Continue
+              {isCreating ? 'Creating…' : 'Continue'}
             </Text>
           </Pressable>
         </View>
