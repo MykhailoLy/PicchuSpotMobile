@@ -27,6 +27,20 @@ export default function NewShootScreen() {
 
   const canContinue = propertyName.trim().length > 0;
 
+  const handleContinue = () => {
+    if (!canContinue) {
+      return;
+    }
+
+    router.push({
+      pathname: '/shoot-media',
+      params: {
+        propertyName: propertyName.trim(),
+        address: address.trim(),
+      },
+    });
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
@@ -36,6 +50,7 @@ export default function NewShootScreen() {
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           <View style={styles.topBar}>
             <Pressable
@@ -68,7 +83,7 @@ export default function NewShootScreen() {
                 accessibilityLabel="Property name"
                 autoCapitalize="words"
                 autoCorrect={false}
-                placeholder="Villa Jávea"
+                placeholder="Villa Alicante"
                 placeholderTextColor="#9AA2A8"
                 returnKeyType="next"
                 value={propertyName}
@@ -89,6 +104,7 @@ export default function NewShootScreen() {
                 autoCapitalize="words"
                 placeholder="Optional"
                 placeholderTextColor="#9AA2A8"
+                returnKeyType="done"
                 value={address}
                 onChangeText={setAddress}
                 style={styles.input}
@@ -106,13 +122,7 @@ export default function NewShootScreen() {
             accessibilityRole="button"
             accessibilityLabel="Continue"
             disabled={!canContinue}
-            onPress={() => {
-              // Local-only prototype for now.
-              console.log({
-                propertyName: propertyName.trim(),
-                address: address.trim(),
-              });
-            }}
+            onPress={handleContinue}
             style={({ pressed }) => [
               styles.continueButton,
               !canContinue && styles.continueButtonDisabled,
