@@ -1,18 +1,38 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import {
+  deletePersistedShootDirectory,
+  deletePersistedShootImage,
+  persistShootImage,
+} from '@/lib/local-files';
+import {
+  addLocalShootAssets,
+  deleteLocalShoot,
+  getLocalShoot,
+  getLocalShootAssets,
+  removeLocalShootAsset,
+  renameLocalShoot,
+  restoreLocalShoot,
+  restoreLocalShootAsset,
+  type LocalShoot,
+  type LocalShootAsset,
+} from '@/lib/local-shoots';
 
 const colors = {
   navy: '#071A2B',
@@ -21,150 +41,81 @@ const colors = {
   line: '#DED3C6',
   white: '#FFFFFF',
   muted: '#69747D',
+  danger: '#A23B3B',
 };
-
-type LocalMedia = {
-  id: string;
-  uri: string;
-  fileName: string;
-  mimeType?: string;
-  width?: number;
-  height?: number;
-  createdAt: string;
-};
-
-type ShootManifest = {
-  id: string;
-  propertyName: string;
-  address: string;
-  createdAt: string;
-  updatedAt: string;
-  media: LocalMedia[];
-};
-
-function createMediaId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function getExtension(asset: ImagePicker.ImagePickerAsset) {
-  const fileNameExtension = asset.fileName
-    ?.split('.')
-    .pop()
-    ?.toLowerCase();
-
-  if (
-    fileNameExtension &&
-    /^[a-z0-9]+$/i.test(fileNameExtension)
-  ) {
-    return fileNameExtension;
-  }
-
-  switch (asset.mimeType) {
-    case 'image/png':
-      return 'png';
-    case 'image/webp':
-      return 'webp';
-    case 'image/heic':
-      return 'heic';
-    case 'image/heif':
-      return 'heif';
-    default:
-      return 'jpg';
-  }
-}
 
 export default function ShootMediaScreen() {
-  const { shootId } = useLocalSearchParams<{
+  const { shootId: shootIdParam } = useLocalSearchParams<{
     shootId?: string;
   }>();
+  const shootId = typeof shootIdParam === 'string' ? shootIdParam : null;
 
-  const [shoot, setShoot] = useState<ShootManifest | null>(null);
+  const [shoot, setShoot] = useState<LocalShoot | null>(null);
+  const [assets, setAssets] = useState<LocalShootAsset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isImporting, setIsImporting] = useState(false);
-
-  const getPaths = useCallback(() => {
-    if (!FileSystem.documentDirectory || !shootId) {
-      return null;
-    }
-
-    const directory =
-      `${FileSystem.documentDirectory}picchuspot/shoots/${shootId}/`;
-
-    return {
-      directory,
-      manifest: `${directory}manifest.json`,
-      mediaDirectory: `${directory}media/`,
-    };
-  }, [shootId]);
-
-  const saveManifest = useCallback(
-    async (nextShoot: ShootManifest) => {
-      const paths = getPaths();
-
-      if (!paths) {
-        throw new Error('Shoot paths are unavailable.');
-      }
-
-      await FileSystem.writeAsStringAsync(
-        paths.manifest,
-        JSON.stringify(nextShoot, null, 2),
-      );
-
-      setShoot(nextShoot);
-    },
-    [getPaths],
-  );
+  const [removingAssetId, setRemovingAssetId] = useState<string | null>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const [isSavingName, setIsSavingName] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadShoot = useCallback(async () => {
-    const paths = getPaths();
-
-    if (!paths) {
-      setIsLoading(false);
-      return;
+    if (!shootId) {
+      throw new Error('Shoot identifier is unavailable.');
     }
 
-    try {
-      const info = await FileSystem.getInfoAsync(paths.manifest);
+    const [savedShoot, savedAssets] = await Promise.all([
+      getLocalShoot(shootId),
+      getLocalShootAssets(shootId),
+    ]);
 
-      if (!info.exists) {
-        throw new Error('Shoot manifest not found.');
-      }
-
-      const content = await FileSystem.readAsStringAsync(paths.manifest);
-
-      const parsed = JSON.parse(content) as ShootManifest;
-
-      setShoot(parsed);
-    } catch (error) {
-      console.error(error);
-
-      Alert.alert(
-        'Shoot unavailable',
-        'This local shoot could not be opened.',
-        [
-          {
-            text: 'Back',
-            onPress: () => router.back(),
-          },
-        ],
-      );
-    } finally {
-      setIsLoading(false);
+    if (!savedShoot) {
+      throw new Error('Shoot not found.');
     }
-  }, [getPaths]);
+
+    setShoot(savedShoot);
+    setAssets(savedAssets);
+  }, [shootId]);
 
   useEffect(() => {
-    void loadShoot();
+    let isActive = true;
+
+    const initialize = async () => {
+      try {
+        await loadShoot();
+      } catch (error) {
+        console.error(error);
+
+        if (isActive) {
+          Alert.alert(
+            'Shoot unavailable',
+            'This local shoot could not be opened.',
+            [{ text: 'Back', onPress: () => router.back() }],
+          );
+        }
+      } finally {
+        if (isActive) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void initialize();
+
+    return () => {
+      isActive = false;
+    };
   }, [loadShoot]);
 
   const handleImportPhotos = async () => {
-    const paths = getPaths();
-
-    if (!paths || !shoot || isImporting) {
+    if (!shootId || !shoot || isImporting) {
       return;
     }
 
     setIsImporting(true);
+    const copiedUris: string[] = [];
+    let metadataCommitted = false;
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -179,48 +130,46 @@ export default function ShootMediaScreen() {
         return;
       }
 
-      await FileSystem.makeDirectoryAsync(paths.mediaDirectory, {
-        intermediates: true,
-      });
-
-      const imported: LocalMedia[] = [];
-
-      for (let index = 0; index < result.assets.length; index += 1) {
-        const asset = result.assets[index];
-
-        const mediaId = createMediaId();
-        const extension = getExtension(asset);
-
-        const fileName =
-          `photo-${Date.now()}-${index + 1}-${mediaId}.${extension}`;
-
-        const destination = `${paths.mediaDirectory}${fileName}`;
-
-        await FileSystem.copyAsync({
-          from: asset.uri,
-          to: destination,
+      for (const selectedAsset of result.assets) {
+        const uri = await persistShootImage(shootId, {
+          uri: selectedAsset.uri,
+          fileName: selectedAsset.fileName,
+          mimeType: selectedAsset.mimeType,
         });
 
-        imported.push({
-          id: mediaId,
-          uri: destination,
-          fileName,
-          mimeType: asset.mimeType ?? undefined,
-          width: asset.width || undefined,
-          height: asset.height || undefined,
-          createdAt: new Date().toISOString(),
-        });
+        copiedUris.push(uri);
       }
 
-      const nextShoot: ShootManifest = {
-        ...shoot,
-        media: [...shoot.media, ...imported],
-        updatedAt: new Date().toISOString(),
-      };
+      const importedAssets = await addLocalShootAssets(
+        shootId,
+        result.assets.map((selectedAsset, index) => ({
+          uri: copiedUris[index],
+          originalFilename: selectedAsset.fileName,
+          mimeType: selectedAsset.mimeType,
+          width: selectedAsset.width || null,
+          height: selectedAsset.height || null,
+        })),
+      );
 
-      await saveManifest(nextShoot);
+      metadataCommitted = true;
+      setAssets((currentAssets) => [...currentAssets, ...importedAssets]);
+      setShoot((currentShoot) =>
+        currentShoot
+          ? { ...currentShoot, updatedAt: Date.now() }
+          : currentShoot,
+      );
     } catch (error) {
       console.error(error);
+
+      if (!metadataCommitted) {
+        for (const uri of copiedUris) {
+          try {
+            deletePersistedShootImage(shootId, uri);
+          } catch (cleanupError) {
+            console.error('Failed to clean up copied image:', cleanupError);
+          }
+        }
+      }
 
       Alert.alert(
         'Import failed',
@@ -231,46 +180,143 @@ export default function ShootMediaScreen() {
     }
   };
 
-  const removePhoto = (media: LocalMedia) => {
+  const handleRemovePhoto = async (asset: LocalShootAsset) => {
+    if (!shootId || removingAssetId) {
+      return;
+    }
+
+    setRemovingAssetId(asset.id);
+
+    try {
+      const removedAsset = await removeLocalShootAsset(asset.id, shootId);
+
+      if (!removedAsset) {
+        await loadShoot();
+        return;
+      }
+
+      try {
+        deletePersistedShootImage(shootId, removedAsset.uri);
+      } catch (fileError) {
+        await restoreLocalShootAsset(removedAsset);
+        throw fileError;
+      }
+
+      setAssets((currentAssets) =>
+        currentAssets.filter((currentAsset) => currentAsset.id !== asset.id),
+      );
+      setShoot((currentShoot) =>
+        currentShoot
+          ? { ...currentShoot, updatedAt: Date.now() }
+          : currentShoot,
+      );
+    } catch (error) {
+      console.error(error);
+
+      try {
+        await loadShoot();
+      } catch (reloadError) {
+        console.error('Failed to reload shoot after removal error:', reloadError);
+      }
+
+      Alert.alert('Could not remove photo', 'Please try again.');
+    } finally {
+      setRemovingAssetId(null);
+    }
+  };
+
+  const confirmRemovePhoto = (asset: LocalShootAsset, index: number) => {
+    Alert.alert(
+      'Remove photo?',
+      `Photo ${index + 1} will be removed from this local shoot. Your original gallery photo will not be changed.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => void handleRemovePhoto(asset),
+        },
+      ],
+    );
+  };
+
+  const beginRename = () => {
+    if (!shoot) {
+      return;
+    }
+
+    setRenameValue(shoot.propertyName);
+    setIsRenaming(true);
+  };
+
+  const handleRename = async () => {
+    if (!shootId || !renameValue.trim() || isSavingName) {
+      return;
+    }
+
+    setIsSavingName(true);
+
+    try {
+      const renamedShoot = await renameLocalShoot(shootId, renameValue);
+
+      setShoot(renamedShoot);
+      setIsRenaming(false);
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Could not rename shoot', 'Please try again.');
+    } finally {
+      setIsSavingName(false);
+    }
+  };
+
+  const handleDeleteShoot = async () => {
+    if (!shootId || isDeleting) {
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      const snapshot = await deleteLocalShoot(shootId);
+
+      if (!snapshot) {
+        router.dismissTo('/');
+        return;
+      }
+
+      try {
+        deletePersistedShootDirectory(shootId);
+      } catch (fileError) {
+        await restoreLocalShoot(snapshot);
+        throw fileError;
+      }
+
+      router.dismissTo('/');
+    } catch (error) {
+      console.error(error);
+      Alert.alert(
+        'Could not delete shoot',
+        'The shoot was kept so you can try again.',
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const confirmDeleteShoot = () => {
     if (!shoot) {
       return;
     }
 
     Alert.alert(
-      'Remove photo?',
-      'This photo will be removed from this local shoot.',
+      `Delete “${shoot.propertyName}”?`,
+      'This removes the shoot and PicchuSpot-owned copies of its photos from this device. Gallery originals are not affected.',
       [
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Remove',
+          text: 'Delete Shoot',
           style: 'destructive',
-          onPress: async () => {
-            try {
-              await FileSystem.deleteAsync(media.uri, {
-                idempotent: true,
-              });
-
-              const nextShoot: ShootManifest = {
-                ...shoot,
-                media: shoot.media.filter(
-                  (item) => item.id !== media.id,
-                ),
-                updatedAt: new Date().toISOString(),
-              };
-
-              await saveManifest(nextShoot);
-            } catch (error) {
-              console.error(error);
-
-              Alert.alert(
-                'Could not remove photo',
-                'Please try again.',
-              );
-            }
-          },
+          onPress: () => void handleDeleteShoot(),
         },
       ],
     );
@@ -284,7 +330,7 @@ export default function ShootMediaScreen() {
     );
   }
 
-  if (!shoot) {
+  if (!shoot || !shootId) {
     return (
       <SafeAreaView style={styles.loadingScreen}>
         <Text style={styles.errorText}>Shoot unavailable.</Text>
@@ -294,155 +340,240 @@ export default function ShootMediaScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}
       >
-        <View style={styles.topBar}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            hitSlop={12}
-            onPress={() => router.back()}
-          >
-            <Text style={styles.back}>‹</Text>
-          </Pressable>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.topBar}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Go back to shoots"
+              hitSlop={12}
+              onPress={() => router.back()}
+            >
+              <Text style={styles.back}>‹</Text>
+            </Pressable>
 
-          <Text style={styles.step}>NEW SHOOT</Text>
+            <Text style={styles.step}>SHOOT GALLERY</Text>
 
-          <View style={styles.topBarSpacer} />
-        </View>
-
-        <View style={styles.intro}>
-          <Text style={styles.propertyName}>
-            {shoot.propertyName}
-          </Text>
-
-          {!!shoot.address && (
-            <Text style={styles.address}>{shoot.address}</Text>
-          )}
-
-          <Text style={styles.title}>Add property photos</Text>
-
-          <Text style={styles.subtitle}>
-            Capture new photos on site or import images already saved on your
-            device.
-          </Text>
-        </View>
-
-        <View style={styles.actions}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Capture photos"
-            onPress={() =>
-              Alert.alert(
-                'Camera',
-                'PicchuSpot camera capture is the next development step.',
-              )
-            }
-            style={({ pressed }) => [
-              styles.primaryAction,
-              pressed && styles.pressed,
-            ]}
-          >
-            <View style={styles.actionText}>
-              <Text style={styles.primaryActionTitle}>
-                Capture Photos
-              </Text>
-
-              <Text style={styles.primaryActionDescription}>
-                Use the PicchuSpot camera for this property.
-              </Text>
-            </View>
-
-            <Text style={styles.primaryArrow}>›</Text>
-          </Pressable>
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Import photos"
-            disabled={isImporting}
-            onPress={handleImportPhotos}
-            style={({ pressed }) => [
-              styles.secondaryAction,
-              pressed && !isImporting && styles.pressed,
-            ]}
-          >
-            <View style={styles.actionText}>
-              <Text style={styles.secondaryActionTitle}>
-                {isImporting ? 'Saving Photos…' : 'Import Photos'}
-              </Text>
-
-              <Text style={styles.secondaryActionDescription}>
-                Choose existing images from your device.
-              </Text>
-            </View>
-
-            {isImporting ? (
-              <ActivityIndicator color={colors.gold} />
-            ) : (
-              <Text style={styles.secondaryArrow}>›</Text>
-            )}
-          </Pressable>
-        </View>
-
-        <View style={styles.galleryHeader}>
-          <Text style={styles.galleryTitle}>
-            Photos
-          </Text>
-
-          <Text style={styles.galleryCount}>
-            {shoot.media.length}
-          </Text>
-        </View>
-
-        {shoot.media.length === 0 ? (
-          <View style={styles.emptyGallery}>
-            <Text style={styles.emptyGalleryTitle}>
-              No photos added
-            </Text>
-
-            <Text style={styles.emptyGalleryText}>
-              Import photos from your device to add them to this shoot.
-            </Text>
+            <View style={styles.topBarSpacer} />
           </View>
-        ) : (
-          <View style={styles.gallery}>
-            {shoot.media.map((media) => (
-              <View key={media.id} style={styles.photoCard}>
-                <Image
-                  source={{ uri: media.uri }}
-                  style={styles.photo}
-                  resizeMode="cover"
+
+          <View style={styles.intro}>
+            {isRenaming ? (
+              <View style={styles.renamePanel}>
+                <Text style={styles.renameLabel}>Shoot name</Text>
+                <TextInput
+                  accessibilityLabel="Shoot name"
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  autoFocus
+                  onChangeText={setRenameValue}
+                  onSubmitEditing={() => void handleRename()}
+                  returnKeyType="done"
+                  style={styles.renameInput}
+                  value={renameValue}
                 />
+
+                <View style={styles.renameActions}>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={isSavingName}
+                    onPress={() => setIsRenaming(false)}
+                    style={({ pressed }) => [
+                      styles.renameCancel,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={styles.renameCancelText}>Cancel</Text>
+                  </Pressable>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={!renameValue.trim() || isSavingName}
+                    onPress={() => void handleRename()}
+                    style={({ pressed }) => [
+                      styles.renameSave,
+                      (!renameValue.trim() || isSavingName) &&
+                        styles.renameSaveDisabled,
+                      pressed && !isSavingName && styles.pressed,
+                    ]}
+                  >
+                    <Text style={styles.renameSaveText}>
+                      {isSavingName ? 'Saving…' : 'Save'}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.propertyHeading}>
+                <View style={styles.propertyCopy}>
+                  <Text style={styles.propertyName}>{shoot.propertyName}</Text>
+                  {!!shoot.address && (
+                    <Text style={styles.address}>{shoot.address}</Text>
+                  )}
+                </View>
 
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Remove photo"
-                  hitSlop={8}
-                  onPress={() => removePhoto(media)}
-                  style={styles.removeButton}
+                  accessibilityLabel="Rename shoot"
+                  hitSlop={10}
+                  onPress={beginRename}
                 >
-                  <Text style={styles.removeButtonText}>×</Text>
+                  <Text style={styles.renameLink}>Rename</Text>
                 </Pressable>
               </View>
-            ))}
+            )}
+
+            <Text style={styles.title}>Add property photos</Text>
+
+            <Text style={styles.subtitle}>
+              Import existing images now. Native PicchuSpot camera capture will
+              be added in a later step.
+            </Text>
           </View>
-        )}
 
-        <View style={styles.note}>
-          <Text style={styles.noteTitle}>Stored locally</Text>
+          <View style={styles.actions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Capture photos, coming soon"
+              onPress={() =>
+                Alert.alert(
+                  'Camera coming soon',
+                  'Native camera capture is not included in this local persistence update.',
+                )
+              }
+              style={({ pressed }) => [
+                styles.primaryAction,
+                pressed && styles.pressed,
+              ]}
+            >
+              <View style={styles.actionText}>
+                <Text style={styles.actionEyebrow}>COMING SOON</Text>
+                <Text style={styles.primaryActionTitle}>Capture Photos</Text>
+                <Text style={styles.primaryActionDescription}>
+                  Use the PicchuSpot camera for this property.
+                </Text>
+              </View>
 
-          <Text style={styles.noteText}>
-            These photos are saved on this device. No upload has started yet.
-          </Text>
-        </View>
-      </ScrollView>
+              <Text style={styles.primaryArrow}>›</Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Import photos from gallery"
+              disabled={isImporting}
+              onPress={() => void handleImportPhotos()}
+              style={({ pressed }) => [
+                styles.secondaryAction,
+                pressed && !isImporting && styles.pressed,
+              ]}
+            >
+              <View style={styles.actionText}>
+                <Text style={styles.secondaryActionTitle}>
+                  {isImporting ? 'Saving Photos…' : 'Import Photos'}
+                </Text>
+                <Text style={styles.secondaryActionDescription}>
+                  Select multiple images in one gallery visit.
+                </Text>
+              </View>
+
+              {isImporting ? (
+                <ActivityIndicator color={colors.gold} />
+              ) : (
+                <Text style={styles.secondaryArrow}>›</Text>
+              )}
+            </Pressable>
+          </View>
+
+          <View style={styles.galleryHeader}>
+            <Text style={styles.galleryTitle}>Photos</Text>
+            <Text style={styles.galleryCount}>{assets.length}</Text>
+          </View>
+
+          {assets.length === 0 ? (
+            <View style={styles.emptyGallery}>
+              <Text style={styles.emptyGalleryTitle}>No photos added</Text>
+              <Text style={styles.emptyGalleryText}>
+                Imported photos are copied to secure app storage on this device.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.gallery}>
+              {assets.map((asset, index) => (
+                <View key={asset.id} style={styles.photoCard}>
+                  <Image
+                    resizeMode="cover"
+                    source={{ uri: asset.uri }}
+                    style={styles.photo}
+                  />
+
+                  <View style={styles.photoNumber}>
+                    <Text style={styles.photoNumberText}>{index + 1}</Text>
+                  </View>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove photo ${index + 1}`}
+                    disabled={removingAssetId !== null}
+                    hitSlop={8}
+                    onPress={() => confirmRemovePhoto(asset, index)}
+                    style={styles.removeButton}
+                  >
+                    {removingAssetId === asset.id ? (
+                      <ActivityIndicator color={colors.white} size="small" />
+                    ) : (
+                      <Text style={styles.removeButtonText}>×</Text>
+                    )}
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <View style={styles.note}>
+            <Text style={styles.noteTitle}>Stored locally</Text>
+            <Text style={styles.noteText}>
+              These PicchuSpot-owned copies remain on this device across
+              navigation and app restarts. No upload has started.
+            </Text>
+          </View>
+
+          <View style={styles.dangerZone}>
+            <Text style={styles.dangerTitle}>Delete this shoot</Text>
+            <Text style={styles.dangerText}>
+              Removes this local shoot and only the copies stored inside its
+              PicchuSpot folder.
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              disabled={isDeleting}
+              onPress={confirmDeleteShoot}
+              style={({ pressed }) => [
+                styles.deleteButton,
+                pressed && !isDeleting && styles.pressed,
+              ]}
+            >
+              <Text style={styles.deleteButtonText}>
+                {isDeleting ? 'Deleting…' : 'Delete Shoot'}
+              </Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   safeArea: {
     flex: 1,
     backgroundColor: colors.white,
@@ -459,7 +590,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 24,
-    paddingBottom: 48,
+    paddingBottom: 52,
   },
   topBar: {
     height: 64,
@@ -484,64 +615,148 @@ const styles = StyleSheet.create({
     width: 36,
   },
   intro: {
-    paddingTop: 28,
+    paddingTop: 24,
+  },
+  propertyHeading: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 16,
+  },
+  propertyCopy: {
+    flex: 1,
   },
   propertyName: {
-    color: colors.gold,
-    fontSize: 12,
+    color: colors.navy,
+    fontSize: 25,
+    lineHeight: 31,
     fontWeight: '700',
-    letterSpacing: 0.8,
+    letterSpacing: -0.5,
   },
   address: {
     marginTop: 5,
     color: colors.muted,
     fontSize: 13,
+    lineHeight: 19,
+  },
+  renameLink: {
+    paddingTop: 6,
+    color: colors.navy,
+    fontSize: 13,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
+  renamePanel: {
+    padding: 17,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 16,
+    backgroundColor: '#FBF9F6',
+  },
+  renameLabel: {
+    color: colors.navy,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  renameInput: {
+    height: 52,
+    marginTop: 8,
+    paddingHorizontal: 15,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 13,
+    backgroundColor: colors.white,
+    color: colors.navy,
+    fontSize: 16,
+  },
+  renameActions: {
+    marginTop: 12,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  renameCancel: {
+    minWidth: 84,
+    height: 44,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+  },
+  renameCancelText: {
+    color: colors.navy,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  renameSave: {
+    minWidth: 84,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.navy,
+  },
+  renameSaveDisabled: {
+    opacity: 0.45,
+  },
+  renameSaveText: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: '700',
   },
   title: {
-    marginTop: 18,
+    marginTop: 32,
     color: colors.navy,
-    fontSize: 38,
-    lineHeight: 44,
+    fontSize: 37,
+    lineHeight: 43,
     fontWeight: '700',
-    letterSpacing: -1.2,
+    letterSpacing: -1.1,
   },
   subtitle: {
-    marginTop: 15,
+    marginTop: 14,
     maxWidth: 350,
     color: colors.muted,
     fontSize: 16,
     lineHeight: 24,
   },
   actions: {
-    marginTop: 36,
+    marginTop: 34,
     gap: 14,
   },
   primaryAction: {
-    minHeight: 96,
-    borderRadius: 18,
+    minHeight: 106,
     paddingHorizontal: 20,
-    paddingVertical: 18,
+    paddingVertical: 17,
+    borderRadius: 18,
     backgroundColor: colors.navy,
     flexDirection: 'row',
     alignItems: 'center',
   },
   secondaryAction: {
     minHeight: 96,
-    borderRadius: 18,
     paddingHorizontal: 20,
     paddingVertical: 18,
-    backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.line,
+    borderRadius: 18,
+    backgroundColor: colors.white,
     flexDirection: 'row',
     alignItems: 'center',
   },
   pressed: {
-    opacity: 0.88,
+    opacity: 0.86,
   },
   actionText: {
     flex: 1,
     marginRight: 12,
+  },
+  actionEyebrow: {
+    marginBottom: 5,
+    color: colors.gold,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
   },
   primaryActionTitle: {
     color: colors.white,
@@ -595,8 +810,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   emptyGallery: {
-    marginTop: 18,
     minHeight: 150,
+    marginTop: 18,
     paddingHorizontal: 30,
     borderWidth: 1,
     borderColor: colors.line,
@@ -611,7 +826,7 @@ const styles = StyleSheet.create({
   },
   emptyGalleryText: {
     marginTop: 7,
-    maxWidth: 270,
+    maxWidth: 275,
     color: colors.muted,
     fontSize: 13,
     lineHeight: 20,
@@ -635,16 +850,33 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  photoNumber: {
+    position: 'absolute',
+    left: 7,
+    bottom: 7,
+    minWidth: 25,
+    height: 25,
+    paddingHorizontal: 7,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(7, 26, 43, 0.82)',
+  },
+  photoNumberText: {
+    color: colors.white,
+    fontSize: 11,
+    fontWeight: '700',
+  },
   removeButton: {
     position: 'absolute',
     top: 7,
     right: 7,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(7, 26, 43, 0.82)',
+    backgroundColor: 'rgba(7, 26, 43, 0.86)',
   },
   removeButtonText: {
     marginTop: -2,
@@ -669,5 +901,38 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 13,
     lineHeight: 20,
+  },
+  dangerZone: {
+    marginTop: 42,
+    paddingTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+  },
+  dangerTitle: {
+    color: colors.navy,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  dangerText: {
+    marginTop: 7,
+    maxWidth: 345,
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  deleteButton: {
+    height: 50,
+    marginTop: 18,
+    borderWidth: 1,
+    borderColor: '#D9AFAF',
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF8F8',
+  },
+  deleteButtonText: {
+    color: colors.danger,
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

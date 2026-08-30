@@ -1,5 +1,4 @@
 import { router } from 'expo-router';
-import * as FileSystem from 'expo-file-system/legacy';
 import { useState } from 'react';
 import {
   Alert,
@@ -14,6 +13,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { createLocalShoot } from '@/lib/local-shoots';
+
 const colors = {
   navy: '#071A2B',
   ivory: '#F4EFE8',
@@ -23,19 +24,6 @@ const colors = {
   muted: '#69747D',
 };
 
-type ShootManifest = {
-  id: string;
-  propertyName: string;
-  address: string;
-  createdAt: string;
-  updatedAt: string;
-  media: [];
-};
-
-function createShootId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
 export default function NewShootScreen() {
   const [propertyName, setPropertyName] = useState('');
   const [address, setAddress] = useState('');
@@ -44,44 +32,19 @@ export default function NewShootScreen() {
   const canContinue = propertyName.trim().length > 0 && !isCreating;
 
   const handleContinue = async () => {
-    if (!canContinue || !FileSystem.documentDirectory) {
+    if (!canContinue) {
       return;
     }
 
     setIsCreating(true);
 
     try {
-      const shootId = createShootId();
+      const shoot = await createLocalShoot(propertyName, address);
 
-      const shootDirectory =
-        `${FileSystem.documentDirectory}picchuspot/shoots/${shootId}/`;
-
-      const manifestPath = `${shootDirectory}manifest.json`;
-
-      await FileSystem.makeDirectoryAsync(shootDirectory, {
-        intermediates: true,
-      });
-
-      const now = new Date().toISOString();
-
-      const manifest: ShootManifest = {
-        id: shootId,
-        propertyName: propertyName.trim(),
-        address: address.trim(),
-        createdAt: now,
-        updatedAt: now,
-        media: [],
-      };
-
-      await FileSystem.writeAsStringAsync(
-        manifestPath,
-        JSON.stringify(manifest, null, 2),
-      );
-
-      router.push({
+      router.replace({
         pathname: '/shoot-media',
         params: {
-          shootId,
+          shootId: shoot.id,
         },
       });
     } catch (error) {
