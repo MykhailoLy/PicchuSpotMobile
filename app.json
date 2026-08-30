@@ -1,16 +1,18 @@
 {
   "expo": {
-    "name": "PicchuSpotMobile",
+    "name": "PicchuSpot",
     "slug": "PicchuSpotMobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "picchuspotmobile",
+    "scheme": "picchuspot",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.picchuspot.app"
     },
     "android": {
+      "package": "com.picchuspot.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

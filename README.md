@@ -18,7 +18,8 @@ Implemented and physically verified on Android:
 - remove photos without deleting gallery originals
 - delete Shoots with scoped cleanup of owned files only
 - persistence across navigation and app restarts
-- stable USB-based Expo Go testing on physical Android
+- project-specific Android development build with stable native identity
+- stable USB-based development-client testing on physical Android
 
 Native camera capture and server-backed order integration are intentionally deferred to later phases.
 
@@ -26,6 +27,7 @@ Native camera capture and server-backed order integration are intentionally defe
 
 - React Native
 - Expo SDK 57
+- Expo Dev Client
 - Expo Router
 - TypeScript
 - Expo SQLite
@@ -58,19 +60,19 @@ Install dependencies:
 npm.cmd install
 ```
 
-Run the standard Expo development server:
+Compile and install the development build on a connected Android device:
 
 ```powershell
-npm.cmd start
+npx.cmd expo run:android --device
 ```
 
-For stable physical Android testing over USB:
+For subsequent USB development sessions:
 
 ```powershell
 npm.cmd run android:usb
 ```
 
-The USB helper discovers an authorized Android device, configures `adb reverse` for port 8082 and starts Metro using `127.0.0.1`. See [Android local persistence testing](./docs/android-local-persistence.md) for the exact workflow and Expo Go scope limitations.
+The USB helper discovers an authorized Android device, configures `adb reverse` for port 8082 and starts Metro for the installed PicchuSpot development build using `127.0.0.1`. See [Android local persistence testing](./docs/android-local-persistence.md) for Android SDK setup, first-build steps, rebuild rules and the physical-device persistence checklist.
 
 ## Validation
 
@@ -94,11 +96,10 @@ Filesystem, image picker, camera and other native/device behavior must also be v
 
 Planned next steps:
 
-1. move device testing from Expo Go to a project-specific development build;
-2. establish the camera foundation;
-3. add Quick single-exposure capture;
-4. validate Balanced and Pro multi-exposure behavior on physical devices before fixing bracket counts or EV spacing;
-5. integrate with the existing PicchuSpot backend contracts for upload, order review, authentication and payment.
+1. establish the camera foundation;
+2. add Quick single-exposure capture;
+3. validate Balanced and Pro multi-exposure behavior on physical devices before fixing bracket counts or EV spacing;
+4. integrate with the existing PicchuSpot backend contracts for upload, order review, authentication and payment.
 
 Do not create a parallel mobile backend or duplicate server-authoritative pricing logic in the app.
 
