@@ -20,14 +20,16 @@ Implemented and physically verified on Android:
 - persistence across navigation and app restarts
 - project-specific Android development build with stable native identity
 - stable USB-based development-client testing on physical Android
+- Quick single-exposure rear-camera capture into local Shoot storage
 
-Native camera capture and server-backed order integration are intentionally deferred to later phases.
+Multi-exposure capture and server-backed order integration are intentionally deferred to later phases.
 
 ## Stack
 
 - React Native
 - Expo SDK 57
 - Expo Dev Client
+- Expo Camera
 - Expo Router
 - TypeScript
 - Expo SQLite
@@ -96,10 +98,9 @@ Filesystem, image picker, camera and other native/device behavior must also be v
 
 Planned next steps:
 
-1. establish the camera foundation;
-2. add Quick single-exposure capture;
-3. validate Balanced and Pro multi-exposure behavior on physical devices before fixing bracket counts or EV spacing;
-4. integrate with the existing PicchuSpot backend contracts for upload, order review, authentication and payment.
+1. use physical-device evidence from Quick capture to guide later camera-quality work;
+2. validate Balanced and Pro multi-exposure behavior on physical devices before fixing bracket counts or EV spacing;
+3. integrate with the existing PicchuSpot backend contracts for upload, order review, authentication and payment.
 
 Do not create a parallel mobile backend or duplicate server-authoritative pricing logic in the app.
 

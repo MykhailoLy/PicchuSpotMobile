@@ -9,6 +9,7 @@ export default function RootLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
+          orientation: 'portrait',
           contentStyle: {
             backgroundColor: '#FFFFFF',
           },
@@ -27,6 +28,15 @@ export default function RootLayout() {
           name="shoot-media"
           options={{
             animation: 'slide_from_right',
+          }}
+        />
+
+        <Stack.Screen
+          name="shoot-camera"
+          options={{
+            animation: 'fade',
+            gestureEnabled: false,
+            orientation: 'all',
           }}
         />
       </Stack>

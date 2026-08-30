@@ -1,6 +1,6 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -78,35 +78,37 @@ export default function ShootMediaScreen() {
     setAssets(savedAssets);
   }, [shootId]);
 
-  useEffect(() => {
-    let isActive = true;
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
 
-    const initialize = async () => {
-      try {
-        await loadShoot();
-      } catch (error) {
-        console.error(error);
+      const initialize = async () => {
+        try {
+          await loadShoot();
+        } catch (error) {
+          console.error(error);
 
-        if (isActive) {
-          Alert.alert(
-            'Shoot unavailable',
-            'This local shoot could not be opened.',
-            [{ text: 'Back', onPress: () => router.back() }],
-          );
+          if (isActive) {
+            Alert.alert(
+              'Shoot unavailable',
+              'This local shoot could not be opened.',
+              [{ text: 'Back', onPress: () => router.back() }],
+            );
+          }
+        } finally {
+          if (isActive) {
+            setIsLoading(false);
+          }
         }
-      } finally {
-        if (isActive) {
-          setIsLoading(false);
-        }
-      }
-    };
+      };
 
-    void initialize();
+      void initialize();
 
-    return () => {
-      isActive = false;
-    };
-  }, [loadShoot]);
+      return () => {
+        isActive = false;
+      };
+    }, [loadShoot]),
+  );
 
   const handleImportPhotos = async () => {
     if (!shootId || !shoot || isImporting) {
@@ -433,20 +435,20 @@ export default function ShootMediaScreen() {
             <Text style={styles.title}>Add property photos</Text>
 
             <Text style={styles.subtitle}>
-              Import existing images now. Native PicchuSpot camera capture will
-              be added in a later step.
+              Capture Quick property photos or import existing images from your
+              gallery.
             </Text>
           </View>
 
           <View style={styles.actions}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Capture photos, coming soon"
+              accessibilityLabel="Capture photos"
               onPress={() =>
-                Alert.alert(
-                  'Camera coming soon',
-                  'Native camera capture is not included in this local persistence update.',
-                )
+                router.push({
+                  pathname: '/shoot-camera',
+                  params: { shootId },
+                })
               }
               style={({ pressed }) => [
                 styles.primaryAction,
@@ -454,10 +456,10 @@ export default function ShootMediaScreen() {
               ]}
             >
               <View style={styles.actionText}>
-                <Text style={styles.actionEyebrow}>COMING SOON</Text>
+                <Text style={styles.actionEyebrow}>QUICK CAPTURE</Text>
                 <Text style={styles.primaryActionTitle}>Capture Photos</Text>
                 <Text style={styles.primaryActionDescription}>
-                  Use the PicchuSpot camera for this property.
+                  Take single-exposure photos for this shoot.
                 </Text>
               </View>
 
@@ -500,7 +502,8 @@ export default function ShootMediaScreen() {
             <View style={styles.emptyGallery}>
               <Text style={styles.emptyGalleryTitle}>No photos added</Text>
               <Text style={styles.emptyGalleryText}>
-                Imported photos are copied to secure app storage on this device.
+                Captured and imported photos are saved to secure app storage on
+                this device.
               </Text>
             </View>
           ) : (

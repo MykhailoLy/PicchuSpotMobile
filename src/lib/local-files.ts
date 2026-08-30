@@ -126,3 +126,26 @@ export function deletePersistedShootDirectory(shootId: string) {
     shootDirectory.delete();
   }
 }
+
+export function getPersistedShootImageSize(shootId: string, uri: string) {
+  const file = getOwnedShootFile(shootId, uri);
+
+  return file.size;
+}
+
+export function deleteTemporaryCameraImage(uri: string) {
+  const normalizedCacheRoot = Paths.normalize(Paths.cache.uri);
+  const file = new File(uri);
+  const normalizedFileUri = Paths.normalize(file.uri);
+  const cachePrefix = normalizedCacheRoot.endsWith('/')
+    ? normalizedCacheRoot
+    : `${normalizedCacheRoot}/`;
+
+  if (!normalizedFileUri.startsWith(cachePrefix)) {
+    throw new Error('Refusing to delete a camera source outside app cache.');
+  }
+
+  if (file.exists) {
+    file.delete();
+  }
+}
