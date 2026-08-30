@@ -1,6 +1,8 @@
 import { router } from 'expo-router';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -21,24 +23,77 @@ const colors = {
   muted: '#69747D',
 };
 
+type ShootManifest = {
+  id: string;
+  propertyName: string;
+  address: string;
+  createdAt: string;
+  updatedAt: string;
+  media: [];
+};
+
+function createShootId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export default function NewShootScreen() {
   const [propertyName, setPropertyName] = useState('');
   const [address, setAddress] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
 
-  const canContinue = propertyName.trim().length > 0;
+  const canContinue = propertyName.trim().length > 0 && !isCreating;
 
-  const handleContinue = () => {
-    if (!canContinue) {
+  const handleContinue = async () => {
+    if (!canContinue || !FileSystem.documentDirectory) {
       return;
     }
 
-    router.push({
-      pathname: '/shoot-media',
-      params: {
+    setIsCreating(true);
+
+    try {
+      const shootId = createShootId();
+
+      const shootDirectory =
+        `${FileSystem.documentDirectory}picchuspot/shoots/${shootId}/`;
+
+      const manifestPath = `${shootDirectory}manifest.json`;
+
+      await FileSystem.makeDirectoryAsync(shootDirectory, {
+        intermediates: true,
+      });
+
+      const now = new Date().toISOString();
+
+      const manifest: ShootManifest = {
+        id: shootId,
         propertyName: propertyName.trim(),
         address: address.trim(),
-      },
-    });
+        createdAt: now,
+        updatedAt: now,
+        media: [],
+      };
+
+      await FileSystem.writeAsStringAsync(
+        manifestPath,
+        JSON.stringify(manifest, null, 2),
+      );
+
+      router.push({
+        pathname: '/shoot-media',
+        params: {
+          shootId,
+        },
+      });
+    } catch (error) {
+      console.error(error);
+
+      Alert.alert(
+        'Could not create shoot',
+        'Please try again.',
+      );
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -85,7 +140,6 @@ export default function NewShootScreen() {
                 autoCorrect={false}
                 placeholder="Villa Alicante"
                 placeholderTextColor="#9AA2A8"
-                returnKeyType="next"
                 value={propertyName}
                 onChangeText={setPropertyName}
                 style={styles.input}
@@ -104,7 +158,6 @@ export default function NewShootScreen() {
                 autoCapitalize="words"
                 placeholder="Optional"
                 placeholderTextColor="#9AA2A8"
-                returnKeyType="done"
                 value={address}
                 onChangeText={setAddress}
                 style={styles.input}
@@ -135,7 +188,7 @@ export default function NewShootScreen() {
                 !canContinue && styles.continueTextDisabled,
               ]}
             >
-              Continue
+              {isCreating ? 'Creating…' : 'Continue'}
             </Text>
           </Pressable>
         </View>

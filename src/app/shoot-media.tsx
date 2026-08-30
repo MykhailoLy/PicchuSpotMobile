@@ -1,9 +1,11 @@
-import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as ImagePicker from 'expo-image-picker';
+import { useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,20 +23,153 @@ const colors = {
   muted: '#69747D',
 };
 
+type LocalMedia = {
+  id: string;
+  uri: string;
+  fileName: string;
+  mimeType?: string;
+  width?: number;
+  height?: number;
+  createdAt: string;
+};
+
+type ShootManifest = {
+  id: string;
+  propertyName: string;
+  address: string;
+  createdAt: string;
+  updatedAt: string;
+  media: LocalMedia[];
+};
+
+function createMediaId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function getExtension(asset: ImagePicker.ImagePickerAsset) {
+  const fileNameExtension = asset.fileName
+    ?.split('.')
+    .pop()
+    ?.toLowerCase();
+
+  if (
+    fileNameExtension &&
+    /^[a-z0-9]+$/i.test(fileNameExtension)
+  ) {
+    return fileNameExtension;
+  }
+
+  switch (asset.mimeType) {
+    case 'image/png':
+      return 'png';
+    case 'image/webp':
+      return 'webp';
+    case 'image/heic':
+      return 'heic';
+    case 'image/heif':
+      return 'heif';
+    default:
+      return 'jpg';
+  }
+}
+
 export default function ShootMediaScreen() {
-  const { propertyName, address } = useLocalSearchParams<{
-    propertyName?: string;
-    address?: string;
+  const { shootId } = useLocalSearchParams<{
+    shootId?: string;
   }>();
 
-  const [photos, setPhotos] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [shoot, setShoot] = useState<ShootManifest | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isImporting, setIsImporting] = useState(false);
+
+  const getPaths = useCallback(() => {
+    if (!FileSystem.documentDirectory || !shootId) {
+      return null;
+    }
+
+    const directory =
+      `${FileSystem.documentDirectory}picchuspot/shoots/${shootId}/`;
+
+    return {
+      directory,
+      manifest: `${directory}manifest.json`,
+      mediaDirectory: `${directory}media/`,
+    };
+  }, [shootId]);
+
+  const saveManifest = useCallback(
+    async (nextShoot: ShootManifest) => {
+      const paths = getPaths();
+
+      if (!paths) {
+        throw new Error('Shoot paths are unavailable.');
+      }
+
+      await FileSystem.writeAsStringAsync(
+        paths.manifest,
+        JSON.stringify(nextShoot, null, 2),
+      );
+
+      setShoot(nextShoot);
+    },
+    [getPaths],
+  );
+
+  const loadShoot = useCallback(async () => {
+    const paths = getPaths();
+
+    if (!paths) {
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const info = await FileSystem.getInfoAsync(paths.manifest);
+
+      if (!info.exists) {
+        throw new Error('Shoot manifest not found.');
+      }
+
+      const content = await FileSystem.readAsStringAsync(paths.manifest);
+
+      const parsed = JSON.parse(content) as ShootManifest;
+
+      setShoot(parsed);
+    } catch (error) {
+      console.error(error);
+
+      Alert.alert(
+        'Shoot unavailable',
+        'This local shoot could not be opened.',
+        [
+          {
+            text: 'Back',
+            onPress: () => router.back(),
+          },
+        ],
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, [getPaths]);
+
+  useEffect(() => {
+    void loadShoot();
+  }, [loadShoot]);
 
   const handleImportPhotos = async () => {
+    const paths = getPaths();
+
+    if (!paths || !shoot || isImporting) {
+      return;
+    }
+
+    setIsImporting(true);
+
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsMultipleSelection: true,
-        allowsEditing: false,
         selectionLimit: 0,
         quality: 1,
         orderedSelection: true,
@@ -44,30 +179,118 @@ export default function ShootMediaScreen() {
         return;
       }
 
-      setPhotos((currentPhotos) => {
-        const existingUris = new Set(currentPhotos.map((photo) => photo.uri));
-
-        const newPhotos = result.assets.filter(
-          (photo) => !existingUris.has(photo.uri),
-        );
-
-        return [...currentPhotos, ...newPhotos];
+      await FileSystem.makeDirectoryAsync(paths.mediaDirectory, {
+        intermediates: true,
       });
+
+      const imported: LocalMedia[] = [];
+
+      for (let index = 0; index < result.assets.length; index += 1) {
+        const asset = result.assets[index];
+
+        const mediaId = createMediaId();
+        const extension = getExtension(asset);
+
+        const fileName =
+          `photo-${Date.now()}-${index + 1}-${mediaId}.${extension}`;
+
+        const destination = `${paths.mediaDirectory}${fileName}`;
+
+        await FileSystem.copyAsync({
+          from: asset.uri,
+          to: destination,
+        });
+
+        imported.push({
+          id: mediaId,
+          uri: destination,
+          fileName,
+          mimeType: asset.mimeType ?? undefined,
+          width: asset.width || undefined,
+          height: asset.height || undefined,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      const nextShoot: ShootManifest = {
+        ...shoot,
+        media: [...shoot.media, ...imported],
+        updatedAt: new Date().toISOString(),
+      };
+
+      await saveManifest(nextShoot);
     } catch (error) {
-      console.error('Failed to import photos:', error);
+      console.error(error);
 
       Alert.alert(
-        'Unable to import photos',
-        'Please try selecting the photos again.',
+        'Import failed',
+        'The selected photos could not be saved. Please try again.',
       );
+    } finally {
+      setIsImporting(false);
     }
   };
 
-  const handleRemovePhoto = (uri: string) => {
-    setPhotos((currentPhotos) =>
-      currentPhotos.filter((photo) => photo.uri !== uri),
+  const removePhoto = (media: LocalMedia) => {
+    if (!shoot) {
+      return;
+    }
+
+    Alert.alert(
+      'Remove photo?',
+      'This photo will be removed from this local shoot.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await FileSystem.deleteAsync(media.uri, {
+                idempotent: true,
+              });
+
+              const nextShoot: ShootManifest = {
+                ...shoot,
+                media: shoot.media.filter(
+                  (item) => item.id !== media.id,
+                ),
+                updatedAt: new Date().toISOString(),
+              };
+
+              await saveManifest(nextShoot);
+            } catch (error) {
+              console.error(error);
+
+              Alert.alert(
+                'Could not remove photo',
+                'Please try again.',
+              );
+            }
+          },
+        },
+      ],
     );
   };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.loadingScreen}>
+        <ActivityIndicator size="large" color={colors.gold} />
+      </SafeAreaView>
+    );
+  }
+
+  if (!shoot) {
+    return (
+      <SafeAreaView style={styles.loadingScreen}>
+        <Text style={styles.errorText}>Shoot unavailable.</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -92,10 +315,12 @@ export default function ShootMediaScreen() {
 
         <View style={styles.intro}>
           <Text style={styles.propertyName}>
-            {propertyName || 'New property'}
+            {shoot.propertyName}
           </Text>
 
-          {!!address && <Text style={styles.address}>{address}</Text>}
+          {!!shoot.address && (
+            <Text style={styles.address}>{shoot.address}</Text>
+          )}
 
           <Text style={styles.title}>Add property photos</Text>
 
@@ -109,17 +334,21 @@ export default function ShootMediaScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Capture photos"
+            onPress={() =>
+              Alert.alert(
+                'Camera',
+                'PicchuSpot camera capture is the next development step.',
+              )
+            }
             style={({ pressed }) => [
               styles.primaryAction,
               pressed && styles.pressed,
             ]}
           >
-            <View style={styles.primaryIcon}>
-              <Text style={styles.primaryIconText}>●</Text>
-            </View>
-
             <View style={styles.actionText}>
-              <Text style={styles.primaryActionTitle}>Capture Photos</Text>
+              <Text style={styles.primaryActionTitle}>
+                Capture Photos
+              </Text>
 
               <Text style={styles.primaryActionDescription}>
                 Use the PicchuSpot camera for this property.
@@ -132,82 +361,80 @@ export default function ShootMediaScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Import photos"
+            disabled={isImporting}
             onPress={handleImportPhotos}
             style={({ pressed }) => [
               styles.secondaryAction,
-              pressed && styles.pressed,
+              pressed && !isImporting && styles.pressed,
             ]}
           >
-            <View style={styles.secondaryIcon}>
-              <Text style={styles.secondaryIconText}>+</Text>
-            </View>
-
             <View style={styles.actionText}>
-              <Text style={styles.secondaryActionTitle}>Import Photos</Text>
+              <Text style={styles.secondaryActionTitle}>
+                {isImporting ? 'Saving Photos…' : 'Import Photos'}
+              </Text>
 
               <Text style={styles.secondaryActionDescription}>
                 Choose existing images from your device.
               </Text>
             </View>
 
-            <Text style={styles.secondaryArrow}>›</Text>
+            {isImporting ? (
+              <ActivityIndicator color={colors.gold} />
+            ) : (
+              <Text style={styles.secondaryArrow}>›</Text>
+            )}
           </Pressable>
         </View>
 
-        {photos.length > 0 && (
-          <View style={styles.photoSection}>
-            <View style={styles.photoHeader}>
-              <View>
-                <Text style={styles.photoTitle}>Property photos</Text>
+        <View style={styles.galleryHeader}>
+          <Text style={styles.galleryTitle}>
+            Photos
+          </Text>
 
-                <Text style={styles.photoCount}>
-                  {photos.length} {photos.length === 1 ? 'photo' : 'photos'}
-                </Text>
+          <Text style={styles.galleryCount}>
+            {shoot.media.length}
+          </Text>
+        </View>
+
+        {shoot.media.length === 0 ? (
+          <View style={styles.emptyGallery}>
+            <Text style={styles.emptyGalleryTitle}>
+              No photos added
+            </Text>
+
+            <Text style={styles.emptyGalleryText}>
+              Import photos from your device to add them to this shoot.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.gallery}>
+            {shoot.media.map((media) => (
+              <View key={media.id} style={styles.photoCard}>
+                <Image
+                  source={{ uri: media.uri }}
+                  style={styles.photo}
+                  resizeMode="cover"
+                />
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove photo"
+                  hitSlop={8}
+                  onPress={() => removePhoto(media)}
+                  style={styles.removeButton}
+                >
+                  <Text style={styles.removeButtonText}>×</Text>
+                </Pressable>
               </View>
-
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Add more photos"
-                hitSlop={8}
-                onPress={handleImportPhotos}
-              >
-                <Text style={styles.addMore}>Add more</Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.photoGrid}>
-              {photos.map((photo, index) => (
-                <View key={`${photo.uri}-${index}`} style={styles.photoItem}>
-                  <Image
-                    source={photo.uri}
-                    style={styles.photo}
-                    contentFit="cover"
-                    transition={100}
-                  />
-
-                  <View style={styles.photoNumber}>
-                    <Text style={styles.photoNumberText}>{index + 1}</Text>
-                  </View>
-
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove photo ${index + 1}`}
-                    onPress={() => handleRemovePhoto(photo.uri)}
-                    style={styles.removeButton}
-                  >
-                    <Text style={styles.removeButtonText}>×</Text>
-                  </Pressable>
-                </View>
-              ))}
-            </View>
+            ))}
           </View>
         )}
 
         <View style={styles.note}>
-          <Text style={styles.noteTitle}>Offline ready</Text>
+          <Text style={styles.noteTitle}>Stored locally</Text>
 
           <Text style={styles.noteText}>
-            Photos stay on this device for now. Uploading will be added later.
+            These photos are saved on this device. No upload has started yet.
           </Text>
         </View>
       </ScrollView>
@@ -220,19 +447,26 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.white,
   },
-
+  loadingScreen: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+  },
+  errorText: {
+    color: colors.muted,
+    fontSize: 15,
+  },
   content: {
     paddingHorizontal: 24,
-    paddingBottom: 40,
+    paddingBottom: 48,
   },
-
   topBar: {
     height: 64,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-
   back: {
     width: 36,
     color: colors.navy,
@@ -240,35 +474,29 @@ const styles = StyleSheet.create({
     lineHeight: 42,
     fontWeight: '300',
   },
-
   step: {
     color: colors.gold,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1.5,
   },
-
   topBarSpacer: {
     width: 36,
   },
-
   intro: {
     paddingTop: 28,
   },
-
   propertyName: {
     color: colors.gold,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.8,
   },
-
   address: {
     marginTop: 5,
     color: colors.muted,
     fontSize: 13,
   },
-
   title: {
     marginTop: 18,
     color: colors.navy,
@@ -277,7 +505,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -1.2,
   },
-
   subtitle: {
     marginTop: 15,
     maxWidth: 350,
@@ -285,214 +512,157 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
   },
-
   actions: {
-    marginTop: 42,
+    marginTop: 36,
     gap: 14,
   },
-
   primaryAction: {
-    minHeight: 104,
+    minHeight: 96,
     borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
     backgroundColor: colors.navy,
     flexDirection: 'row',
     alignItems: 'center',
   },
-
   secondaryAction: {
-    minHeight: 104,
+    minHeight: 96,
     borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.line,
     flexDirection: 'row',
     alignItems: 'center',
   },
-
   pressed: {
     opacity: 0.88,
   },
-
-  primaryIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  primaryIconText: {
-    color: colors.gold,
-    fontSize: 17,
-  },
-
-  secondaryIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: colors.ivory,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  secondaryIconText: {
-    color: colors.gold,
-    fontSize: 25,
-    fontWeight: '400',
-  },
-
   actionText: {
     flex: 1,
-    marginLeft: 16,
     marginRight: 12,
   },
-
   primaryActionTitle: {
     color: colors.white,
     fontSize: 17,
     fontWeight: '700',
   },
-
   primaryActionDescription: {
     marginTop: 5,
     color: '#C7CED3',
     fontSize: 13,
     lineHeight: 19,
   },
-
   secondaryActionTitle: {
     color: colors.navy,
     fontSize: 17,
     fontWeight: '700',
   },
-
   secondaryActionDescription: {
     marginTop: 5,
     color: colors.muted,
     fontSize: 13,
     lineHeight: 19,
   },
-
   primaryArrow: {
     color: colors.white,
     fontSize: 30,
     fontWeight: '300',
   },
-
   secondaryArrow: {
     color: colors.navy,
     fontSize: 30,
     fontWeight: '300',
   },
-
-  photoSection: {
-    marginTop: 36,
-    paddingTop: 26,
+  galleryHeader: {
+    marginTop: 34,
+    paddingTop: 24,
     borderTopWidth: 1,
     borderTopColor: colors.line,
-  },
-
-  photoHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    alignItems: 'center',
   },
-
-  photoTitle: {
+  galleryTitle: {
     color: colors.navy,
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '700',
   },
-
-  photoCount: {
-    marginTop: 3,
+  galleryCount: {
+    color: colors.muted,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  emptyGallery: {
+    marginTop: 18,
+    minHeight: 150,
+    paddingHorizontal: 30,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyGalleryTitle: {
+    color: colors.navy,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  emptyGalleryText: {
+    marginTop: 7,
+    maxWidth: 270,
     color: colors.muted,
     fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
   },
-
-  addMore: {
-    color: colors.navy,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  photoGrid: {
+  gallery: {
+    marginTop: 18,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
   },
-
-  photoItem: {
+  photoCard: {
+    position: 'relative',
     width: '48%',
-    aspectRatio: 4 / 3,
+    aspectRatio: 1.25,
     overflow: 'hidden',
     borderRadius: 14,
     backgroundColor: colors.ivory,
   },
-
   photo: {
     width: '100%',
     height: '100%',
   },
-
-  photoNumber: {
-    position: 'absolute',
-    left: 8,
-    bottom: 8,
-    minWidth: 25,
-    height: 25,
-    paddingHorizontal: 7,
-    borderRadius: 13,
-    backgroundColor: 'rgba(7,26,43,0.86)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  photoNumberText: {
-    color: colors.white,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-
   removeButton: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 7,
+    right: 7,
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: 'rgba(7,26,43,0.86)',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(7, 26, 43, 0.82)',
   },
-
   removeButtonText: {
     marginTop: -2,
     color: colors.white,
     fontSize: 22,
     lineHeight: 24,
-    fontWeight: '300',
   },
-
   note: {
     marginTop: 30,
     paddingTop: 22,
     borderTopWidth: 1,
     borderTopColor: colors.line,
   },
-
   noteTitle: {
     color: colors.navy,
     fontSize: 13,
     fontWeight: '700',
   },
-
   noteText: {
     marginTop: 6,
     maxWidth: 345,
