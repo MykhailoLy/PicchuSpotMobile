@@ -12,6 +12,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -60,6 +61,8 @@ export default function ShootCameraScreen() {
     shootId?: string;
   }>();
   const shootId = typeof shootIdParam === 'string' ? shootIdParam : null;
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isLandscape = windowWidth > windowHeight;
 
   const cameraRef = useRef<CameraView | null>(null);
   const captureLockRef = useRef(false);
@@ -399,171 +402,231 @@ export default function ShootCameraScreen() {
   return (
     <View style={styles.cameraScreen}>
       <StatusBar hidden />
-      {!isLeaving && (
-        <CameraView
-          key={cameraKey}
-          ref={cameraRef}
-          facing="back"
-          flash="off"
-          mode="picture"
-          onCameraReady={() => setIsCameraReady(true)}
-          onMountError={(event) => {
-            setIsCameraReady(false);
-            setCameraMountError(event.message || 'The camera preview failed.');
-          }}
-          responsiveOrientationWhenOrientationLocked
-          style={styles.cameraPreview}
-          zoom={zoom}
-        />
-      )}
-
-      <View pointerEvents="none" style={styles.grid}>
-        <View style={[styles.verticalGridLine, styles.verticalGridThird]} />
-        <View style={[styles.verticalGridLine, styles.verticalGridTwoThirds]} />
-        <View style={[styles.horizontalGridLine, styles.horizontalGridThird]} />
-        <View
-          style={[styles.horizontalGridLine, styles.horizontalGridTwoThirds]}
-        />
-      </View>
-
       <SafeAreaView pointerEvents="box-none" style={styles.cameraOverlay}>
-        <View style={styles.cameraTopBar}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Back to Shoot"
-            disabled={isCapturing}
-            hitSlop={10}
-            onPress={leaveCamera}
-            style={({ pressed }) => [
-              styles.topAction,
-              pressed && styles.controlPressed,
+        <View
+          style={[
+            styles.cameraLayout,
+            isLandscape
+              ? styles.cameraLayoutLandscape
+              : styles.cameraLayoutPortrait,
+          ]}
+        >
+          <View
+            style={[
+              styles.cameraTopBar,
+              isLandscape && styles.cameraTopBarLandscape,
             ]}
           >
-            <Text style={styles.topActionText}>Back</Text>
-          </Pressable>
-
-          <View style={styles.shootHeading}>
-            <Text style={styles.cameraKicker}>QUICK</Text>
-            <Text style={styles.cameraShootName} numberOfLines={1}>
-              {shoot.propertyName}
-            </Text>
-          </View>
-
-          <Pressable
-            accessibilityRole="button"
-            disabled={isCapturing}
-            hitSlop={10}
-            onPress={leaveCamera}
-            style={({ pressed }) => [
-              styles.topAction,
-              pressed && styles.controlPressed,
-            ]}
-          >
-            <Text style={styles.doneText}>Done</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.cameraFooter}>
-          {!!captureError && (
-            <Text accessibilityLiveRegion="polite" style={styles.captureError}>
-              {captureError}
-            </Text>
-          )}
-
-          <View style={styles.zoomControls}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Decrease camera zoom"
-              disabled={zoom === 0 || isCapturing}
-              onPress={() => adjustZoom(-ZOOM_STEP)}
+              accessibilityLabel="Back to Shoot"
+              disabled={isCapturing}
+              hitSlop={10}
+              onPress={leaveCamera}
               style={({ pressed }) => [
-                styles.zoomButton,
-                (zoom === 0 || isCapturing) && styles.controlDisabled,
+                styles.topAction,
                 pressed && styles.controlPressed,
               ]}
             >
-              <Text style={styles.zoomButtonText}>−</Text>
+              <Text style={styles.topActionText}>Back</Text>
             </Pressable>
-            <Text style={styles.zoomValue}>Zoom {Math.round(zoom * 100)}%</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Increase camera zoom"
-              disabled={zoom >= MAX_TEST_ZOOM || isCapturing}
-              onPress={() => adjustZoom(ZOOM_STEP)}
-              style={({ pressed }) => [
-                styles.zoomButton,
-                (zoom >= MAX_TEST_ZOOM || isCapturing) &&
-                  styles.controlDisabled,
-                pressed && styles.controlPressed,
-              ]}
-            >
-              <Text style={styles.zoomButtonText}>+</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Reset camera zoom"
-              disabled={zoom === 0 || isCapturing}
-              onPress={() => setZoom(0)}
-              style={({ pressed }) => [
-                styles.resetButton,
-                (zoom === 0 || isCapturing) && styles.controlDisabled,
-                pressed && styles.controlPressed,
-              ]}
-            >
-              <Text style={styles.resetButtonText}>Reset</Text>
-            </Pressable>
-          </View>
 
-          <View style={styles.captureRow}>
-            <View style={styles.thumbnailSlot}>
-              {lastCapture ? (
-                <Image
-                  accessibilityLabel="Last captured photo"
-                  source={{ uri: lastCapture.uri }}
-                  style={styles.thumbnail}
-                />
-              ) : (
-                <View style={styles.thumbnailPlaceholder} />
-              )}
+            <View
+              style={[
+                styles.shootHeading,
+                isLandscape && styles.shootHeadingLandscape,
+              ]}
+            >
+              <Text style={styles.cameraKicker}>QUICK</Text>
+              <Text style={styles.cameraShootName} numberOfLines={1}>
+                {shoot.propertyName}
+              </Text>
             </View>
 
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Take Quick photo"
-              disabled={!isCameraReady || isCapturing}
-              onPress={() => void handleCapture()}
+              disabled={isCapturing}
+              hitSlop={10}
+              onPress={leaveCamera}
               style={({ pressed }) => [
-                styles.shutterOuter,
-                (!isCameraReady || isCapturing) && styles.controlDisabled,
-                pressed && isCameraReady && styles.shutterPressed,
+                styles.topAction,
+                pressed && styles.controlPressed,
               ]}
             >
-              <View style={styles.shutterInner}>
-                {isCapturing && (
-                  <ActivityIndicator color={colors.navy} size="small" />
+              <Text style={styles.doneText}>Done</Text>
+            </Pressable>
+          </View>
+
+          <View
+            style={[
+              styles.previewStage,
+              isLandscape
+                ? styles.previewStageLandscape
+                : styles.previewStagePortrait,
+            ]}
+          >
+            <View
+              style={[
+                styles.cameraPreviewFrame,
+                isLandscape
+                  ? styles.cameraPreviewFrameLandscape
+                  : styles.cameraPreviewFramePortrait,
+              ]}
+            >
+              {!isLeaving && (
+                <CameraView
+                  key={cameraKey}
+                  ref={cameraRef}
+                  facing="back"
+                  flash="off"
+                  mode="picture"
+                  onCameraReady={() => setIsCameraReady(true)}
+                  onMountError={(event) => {
+                    setIsCameraReady(false);
+                    setCameraMountError(
+                      event.message || 'The camera preview failed.',
+                    );
+                  }}
+                  responsiveOrientationWhenOrientationLocked
+                  style={styles.cameraPreview}
+                  zoom={zoom}
+                />
+              )}
+
+              <View pointerEvents="none" style={styles.grid}>
+                <View
+                  style={[styles.verticalGridLine, styles.verticalGridThird]}
+                />
+                <View
+                  style={[styles.verticalGridLine, styles.verticalGridTwoThirds]}
+                />
+                <View
+                  style={[styles.horizontalGridLine, styles.horizontalGridThird]}
+                />
+                <View
+                  style={[
+                    styles.horizontalGridLine,
+                    styles.horizontalGridTwoThirds,
+                  ]}
+                />
+              </View>
+            </View>
+          </View>
+
+          <View
+            style={[
+              styles.cameraFooter,
+              isLandscape && styles.cameraFooterLandscape,
+            ]}
+          >
+            {!!captureError && (
+              <Text
+                accessibilityLiveRegion="polite"
+                style={styles.captureError}
+              >
+                {captureError}
+              </Text>
+            )}
+
+            <View style={styles.zoomControls}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Decrease camera zoom"
+                disabled={zoom === 0 || isCapturing}
+                onPress={() => adjustZoom(-ZOOM_STEP)}
+                style={({ pressed }) => [
+                  styles.zoomButton,
+                  (zoom === 0 || isCapturing) && styles.controlDisabled,
+                  pressed && styles.controlPressed,
+                ]}
+              >
+                <Text style={styles.zoomButtonText}>−</Text>
+              </Pressable>
+              <Text style={styles.zoomValue}>
+                Zoom {Math.round(zoom * 100)}%
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Increase camera zoom"
+                disabled={zoom >= MAX_TEST_ZOOM || isCapturing}
+                onPress={() => adjustZoom(ZOOM_STEP)}
+                style={({ pressed }) => [
+                  styles.zoomButton,
+                  (zoom >= MAX_TEST_ZOOM || isCapturing) &&
+                    styles.controlDisabled,
+                  pressed && styles.controlPressed,
+                ]}
+              >
+                <Text style={styles.zoomButtonText}>+</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Reset camera zoom"
+                disabled={zoom === 0 || isCapturing}
+                onPress={() => setZoom(0)}
+                style={({ pressed }) => [
+                  styles.resetButton,
+                  (zoom === 0 || isCapturing) && styles.controlDisabled,
+                  pressed && styles.controlPressed,
+                ]}
+              >
+                <Text style={styles.resetButtonText}>Reset</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.captureRow}>
+              <View style={styles.thumbnailSlot}>
+                {lastCapture ? (
+                  <Image
+                    accessibilityLabel="Last captured photo"
+                    source={{ uri: lastCapture.uri }}
+                    style={styles.thumbnail}
+                  />
+                ) : (
+                  <View style={styles.thumbnailPlaceholder} />
                 )}
               </View>
-            </Pressable>
 
-            <View style={styles.sessionCount}>
-              <Text style={styles.sessionCountNumber}>{sessionCaptureCount}</Text>
-              <Text style={styles.sessionCountLabel}>THIS SESSION</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Take Quick photo"
+                disabled={!isCameraReady || isCapturing}
+                onPress={() => void handleCapture()}
+                style={({ pressed }) => [
+                  styles.shutterOuter,
+                  (!isCameraReady || isCapturing) && styles.controlDisabled,
+                  pressed && isCameraReady && styles.shutterPressed,
+                ]}
+              >
+                <View style={styles.shutterInner}>
+                  {isCapturing && (
+                    <ActivityIndicator color={colors.navy} size="small" />
+                  )}
+                </View>
+              </Pressable>
+
+              <View style={styles.sessionCount}>
+                <Text style={styles.sessionCountNumber}>
+                  {sessionCaptureCount}
+                </Text>
+                <Text style={styles.sessionCountLabel}>THIS SESSION</Text>
+              </View>
             </View>
-          </View>
 
-          <Text accessibilityLiveRegion="polite" style={styles.captureStatus}>
-            {isCapturing
-              ? 'Saving photo…'
-              : isCameraReady
-                ? 'Ready'
-                : 'Preparing camera…'}
-          </Text>
-          {lastCapture && (
-            <Text style={styles.captureDetails}>
-              Last: {lastCapture.width} × {lastCapture.height} ·{' '}
-              {formatFileSize(lastCapture.byteSize)}
+            <Text accessibilityLiveRegion="polite" style={styles.captureStatus}>
+              {isCapturing
+                ? 'Saving photo…'
+                : isCameraReady
+                  ? 'Ready'
+                  : 'Preparing camera…'}
             </Text>
-          )}
+            {lastCapture && (
+              <Text style={styles.captureDetails}>
+                Last: {lastCapture.width} × {lastCapture.height} ·{' '}
+                {formatFileSize(lastCapture.byteSize)}
+              </Text>
+            )}
+          </View>
         </View>
       </SafeAreaView>
     </View>
@@ -726,12 +789,45 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
   },
+  cameraLayout: {
+    flex: 1,
+  },
+  cameraLayoutPortrait: {
+    flexDirection: 'column',
+  },
+  cameraLayoutLandscape: {
+    flexDirection: 'row',
+  },
   cameraPreview: {
     position: 'absolute',
     top: 0,
     right: 0,
     bottom: 0,
     left: 0,
+  },
+  cameraPreviewFrame: {
+    overflow: 'hidden',
+    backgroundColor: '#000000',
+  },
+  cameraPreviewFramePortrait: {
+    width: '100%',
+    aspectRatio: 3 / 4,
+  },
+  cameraPreviewFrameLandscape: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+  },
+  previewStage: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#000000',
+  },
+  previewStagePortrait: {
+    width: '100%',
+  },
+  previewStageLandscape: {
+    minWidth: 0,
   },
   grid: {
     position: 'absolute',
@@ -767,12 +863,7 @@ const styles = StyleSheet.create({
     top: '66.666%',
   },
   cameraOverlay: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    justifyContent: 'space-between',
+    flex: 1,
   },
   cameraTopBar: {
     minHeight: 68,
@@ -782,6 +873,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: 'rgba(7, 26, 43, 0.76)',
+  },
+  cameraTopBarLandscape: {
+    width: 160,
+    minHeight: 0,
+    paddingHorizontal: 8,
+    paddingVertical: 18,
+    flexDirection: 'column',
   },
   topAction: {
     minWidth: 58,
@@ -804,6 +902,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     alignItems: 'center',
   },
+  shootHeadingLandscape: {
+    width: '100%',
+    paddingHorizontal: 0,
+    justifyContent: 'center',
+  },
   cameraKicker: {
     color: colors.gold,
     fontSize: 9,
@@ -823,6 +926,13 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     alignItems: 'center',
     backgroundColor: 'rgba(7, 26, 43, 0.86)',
+  },
+  cameraFooterLandscape: {
+    width: 260,
+    minHeight: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 18,
+    justifyContent: 'center',
   },
   captureError: {
     marginBottom: 10,
