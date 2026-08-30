@@ -16,6 +16,16 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npx expo start
    ```
 
+   For stable physical-Android testing over USB, including local persistence
+   checks, use:
+
+   ```powershell
+   npm.cmd run android:usb
+   ```
+
+   See [Android local persistence testing](./docs/android-local-persistence.md)
+   for Expo Go scope limitations and the device verification checklist.
+
 In the output, you'll find options to open the app in a
 
 - [development build](https://docs.expo.dev/develop/development-builds/introduction/)
