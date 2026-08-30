@@ -131,8 +131,10 @@ Use a uniquely named test Shoot and a known non-sensitive image:
 10. Delete the test Shoot and confirm it no longer appears in Shoots. The app
     must delete only its owned copy; the original imported image remains.
 
-Camera capture is outside this workflow until the native camera foundation is
-implemented.
+For Quick camera testing, deny and recover camera permission once, take repeated
+portrait and landscape photos, then repeat steps 7 through 10 for the captured
+files. The development build intentionally saves camera output only inside the
+same Shoot-owned document directory; it does not export to the system Gallery.
 
 References:
 
