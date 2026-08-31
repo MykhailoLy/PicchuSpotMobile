@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { router, type Href } from 'expo-router';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function AccountScreen() {
@@ -10,6 +11,24 @@ export default function AccountScreen() {
         <Text style={styles.text}>
           Profile, preferences and account settings will live here.
         </Text>
+
+        {__DEV__ && (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/camera-diagnostics' as Href)}
+            style={({ pressed }) => [
+              styles.diagnosticsButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.diagnosticsKicker}>DEVELOPMENT ONLY</Text>
+            <Text style={styles.diagnosticsTitle}>Camera2 diagnostics</Text>
+            <Text style={styles.diagnosticsBody}>
+              Inspect rear-camera capabilities and run the temporary native
+              feasibility probes.
+            </Text>
+          </Pressable>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -43,5 +62,34 @@ const styles = StyleSheet.create({
     color: '#69747D',
     fontSize: 16,
     lineHeight: 24,
+  },
+  diagnosticsButton: {
+    marginTop: 36,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#DED3C6',
+    borderRadius: 16,
+    backgroundColor: '#F4EFE8',
+  },
+  diagnosticsKicker: {
+    color: '#C7A94E',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+  },
+  diagnosticsTitle: {
+    marginTop: 8,
+    color: '#071A2B',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  diagnosticsBody: {
+    marginTop: 7,
+    color: '#53616B',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  pressed: {
+    opacity: 0.82,
   },
 });

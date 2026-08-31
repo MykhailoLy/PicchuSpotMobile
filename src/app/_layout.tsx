@@ -39,6 +39,14 @@ export default function RootLayout() {
             orientation: 'all',
           }}
         />
+
+        <Stack.Screen
+          name="camera-diagnostics"
+          options={{
+            animation: 'slide_from_right',
+            orientation: 'portrait',
+          }}
+        />
       </Stack>
     </>
   );
