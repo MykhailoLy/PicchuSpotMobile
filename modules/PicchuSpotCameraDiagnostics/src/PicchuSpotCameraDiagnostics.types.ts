@@ -22,11 +22,30 @@ export type CameraInventory = {
   };
   discoveredCameraIds: string[];
   rearCameraCount: number;
+  physicalCameraCount: number;
   enumerationErrors: Array<{
     cameraId: string;
     error: string;
   }>;
   rearCameras: RearCameraDiagnostics[];
+  physicalCameraCharacterizationErrors: Array<{
+    physicalCameraId: string;
+    logicalParentCameraIds: string[];
+    error: string;
+  }>;
+  physicalCameras: PhysicalCameraDiagnostics[];
+  motionSensors: MotionSensorInventory;
+  notes: string[];
+};
+
+export type MotionSensorInventory = {
+  requestedSamplingPeriodUs: number;
+  sensors: Array<{
+    type: number;
+    typeName: string;
+    available: boolean;
+    details: Record<string, unknown> | null;
+  }>;
   notes: string[];
 };
 
@@ -73,6 +92,14 @@ export type RearCameraDiagnostics = {
     range: CameraRange<number>;
     cropRegionAtMinimumZoom: CameraRect | null;
     cropRegionAtMaximumZoom: CameraRect | null;
+    zoomRatioRange: CameraRange<number> | null;
+    captureResultKeyAvailability: {
+      effectiveZoomRatio: boolean;
+      activePhysicalCameraId: boolean;
+      activePhysicalSensorCropRegion: boolean;
+      focalLength: boolean;
+      cropRegion: boolean;
+    };
     evidence: string;
   };
   aeCompensation: {
@@ -93,6 +120,10 @@ export type RearCameraDiagnostics = {
       height: number;
     } | null;
     orientationDegrees: number | null;
+    timestampSource: {
+      raw: number | null;
+      name: string;
+    };
     activeArray: CameraRect | null;
     pixelArray: CameraSize | null;
   };
@@ -113,6 +144,37 @@ export type RearCameraDiagnostics = {
     raw: CameraSize[];
     yuv: CameraSize[];
   };
+};
+
+export type PhysicalCameraDiagnostics = {
+  physicalCameraId: string;
+  logicalParentCameraIds: string[];
+  independentlyOpenable: boolean;
+  relationship:
+    | 'independently-openable-and-physical'
+    | 'physical-only-backing-logical-camera';
+  lensLabels: string[];
+  mappingInference: string | null;
+  hardwareLevel: RearCameraDiagnostics['hardwareLevel'];
+  lens: RearCameraDiagnostics['lens'];
+  sensor: {
+    physicalSizeMm: {
+      width: number;
+      height: number;
+    } | null;
+    activeArray: CameraRect | null;
+    pixelArray: CameraSize | null;
+    exposureTimeRangeNs: CameraRange<number> | null;
+    sensitivityRangeIso: CameraRange<number> | null;
+    maxFrameDurationNs: number | null;
+    orientationDegrees: number | null;
+    timestampSource: {
+      raw: number | null;
+      name: string;
+    };
+  };
+  zoom: RearCameraDiagnostics['zoom'];
+  outputs: RearCameraDiagnostics['outputs'];
 };
 
 export type CameraRect = {
@@ -138,7 +200,21 @@ export type CameraDiagnosticRun = {
     aeCompensation: Record<string, unknown>;
     manualSensor: Record<string, unknown>;
     burst: Record<string, unknown>;
+    zoomRatios: Record<string, unknown>;
+    manualBurst: Record<string, unknown>;
   };
+  cacheReport: {
+    written: boolean;
+    filename: string | null;
+  };
+};
+
+export type SensorDiagnosticRun = {
+  schemaVersion: number;
+  kind: 'android-sensor-diagnostic-run';
+  capturedAtUtc: string;
+  android: CameraInventory['android'];
+  measurements: Record<string, unknown>;
   cacheReport: {
     written: boolean;
     filename: string | null;

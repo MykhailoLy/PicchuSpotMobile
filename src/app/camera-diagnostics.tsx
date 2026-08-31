@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import CameraDiagnosticsModule, {
   type CameraDiagnosticRun,
   type CameraInventory,
+  type SensorDiagnosticRun,
 } from '../../modules/PicchuSpotCameraDiagnostics';
 
 function formatJson(value: unknown) {
@@ -25,9 +26,12 @@ function formatJson(value: unknown) {
 export default function CameraDiagnosticsScreen() {
   const [inventory, setInventory] = useState<CameraInventory | null>(null);
   const [run, setRun] = useState<CameraDiagnosticRun | null>(null);
+  const [sensorRun, setSensorRun] = useState<SensorDiagnosticRun | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoadingInventory, setIsLoadingInventory] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [isRunningSensors, setIsRunningSensors] = useState(false);
+  const [sensorPhase, setSensorPhase] = useState<string | null>(null);
 
   const loadInventory = useCallback(async () => {
     if (Platform.OS !== 'android' || !CameraDiagnosticsModule) {
@@ -67,6 +71,37 @@ export default function CameraDiagnosticsScreen() {
     }
   }, []);
 
+  const runSensorDiagnostics = useCallback(async () => {
+    if (Platform.OS !== 'android' || !CameraDiagnosticsModule) {
+      setError('Sensor diagnostics require the Android development build.');
+      return;
+    }
+
+    setIsRunningSensors(true);
+    setError(null);
+    setSensorPhase('Hold the handset still for 3 seconds.');
+    const phaseTimers = [
+      setTimeout(() => {
+        setSensorPhase('Prepare to move the handset…');
+      }, 3_000),
+      setTimeout(() => {
+        setSensorPhase('Move the handset deliberately for 3 seconds.');
+      }, 4_500),
+    ];
+
+    try {
+      setSensorRun(await CameraDiagnosticsModule.runSensorDiagnosticsAsync());
+      setSensorPhase('Sensor probe complete.');
+    } catch (sensorError) {
+      console.error(sensorError);
+      setError('The native level and movement diagnostics could not be completed.');
+      setSensorPhase(null);
+    } finally {
+      phaseTimers.forEach(clearTimeout);
+      setIsRunningSensors(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!__DEV__) {
       return undefined;
@@ -90,6 +125,8 @@ export default function CameraDiagnosticsScreen() {
       </SafeAreaView>
     );
   }
+
+  const isBusy = isLoadingInventory || isRunning || isRunningSensors;
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -121,12 +158,12 @@ export default function CameraDiagnosticsScreen() {
         <View style={styles.actions}>
           <Pressable
             accessibilityRole="button"
-            disabled={isLoadingInventory || isRunning}
+            disabled={isBusy}
             onPress={() => void loadInventory()}
             style={({ pressed }) => [
               styles.secondaryButton,
               pressed && styles.pressed,
-              (isLoadingInventory || isRunning) && styles.disabled,
+              isBusy && styles.disabled,
             ]}
           >
             <Text style={styles.secondaryButtonText}>
@@ -135,12 +172,12 @@ export default function CameraDiagnosticsScreen() {
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            disabled={isLoadingInventory || isRunning}
+            disabled={isBusy}
             onPress={() => void runDiagnostics()}
             style={({ pressed }) => [
               styles.primaryButton,
               pressed && styles.pressed,
-              (isLoadingInventory || isRunning) && styles.disabled,
+              isBusy && styles.disabled,
             ]}
           >
             {isRunning && <ActivityIndicator color="#FFFFFF" size="small" />}
@@ -148,6 +185,26 @@ export default function CameraDiagnosticsScreen() {
               {isRunning ? 'Running diagnostics…' : 'Run diagnostics'}
             </Text>
           </Pressable>
+          <Text style={styles.sensorHint}>
+            Sensor timing: keep the phone still for 3 seconds, use the 1.5-second
+            transition to prepare, then move it deliberately for 3 seconds.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            disabled={isBusy}
+            onPress={() => void runSensorDiagnostics()}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.pressed,
+              isBusy && styles.disabled,
+            ]}
+          >
+            {isRunningSensors && <ActivityIndicator color="#FFFFFF" size="small" />}
+            <Text style={styles.primaryButtonText}>
+              {isRunningSensors ? 'Measuring sensors…' : 'Run level + movement probe'}
+            </Text>
+          </Pressable>
+          {!!sensorPhase && <Text style={styles.sensorPhase}>{sensorPhase}</Text>}
         </View>
 
         <Text style={styles.sectionLabel}>REAR CAMERA INVENTORY</Text>
@@ -158,6 +215,13 @@ export default function CameraDiagnosticsScreen() {
         <Text style={styles.sectionLabel}>DYNAMIC RESULTS</Text>
         <Text selectable style={styles.output}>
           {run ? formatJson(run) : 'Run diagnostics to collect dynamic results.'}
+        </Text>
+
+        <Text style={styles.sectionLabel}>LEVEL + MOVEMENT RESULTS</Text>
+        <Text selectable style={styles.output}>
+          {sensorRun
+            ? formatJson(sensorRun)
+            : 'Run the timed sensor probe to collect still and movement results.'}
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -252,6 +316,17 @@ const styles = StyleSheet.create({
     color: '#071A2B',
     fontSize: 14,
     fontWeight: '700',
+  },
+  sensorHint: {
+    color: '#53616B',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  sensorPhase: {
+    color: '#071A2B',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   sectionLabel: {
     marginTop: 30,
