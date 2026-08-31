@@ -262,14 +262,24 @@ production level or movement UI.
 
 | Check | Result |
 | --- | --- |
-| Physical S25 Ultra preview opens | Passed in the existing Quick Camera route |
-| Portrait 3:4 preview/capture path | Passed; one Quick capture completed and reported `3060 × 4080` |
-| Landscape 4:3 preview/capture path | Not physically verified in this run; the route still declares `orientation: 'all'` and the existing preview uses `4/3`, but the connected handset remained portrait. Forced ADB rotation produced a letterboxed portrait app because of the existing app-level portrait manifest, so it was not treated as a valid landscape result. |
-| Quick capture persistence after restart | Passed; the shoot photo count increased from 2 to 3 and remained 3 after relaunch |
-| Done → Gallery | Passed; Done returned to Shoot Gallery and the new photo was visible in the gallery count |
+| Physical S25 Ultra preview opens | Passed on the Galaxy S25 Ultra (`SM-S938B`, Android 16) with Android auto-rotate enabled |
+| Portrait-only screen regression | Passed. Shoots, Orders, Account, New Shoot, and Shoot Gallery each remained in a `1440 × 3120` portrait Android window while the handset was physically rotated. |
+| Portrait 3:4 preview/capture path | Passed. The Android window was `1440 × 3120`, the preview was `1440 × 1920` (3:4), the grid stayed inside the preview, and the saved JPEG was `3060 × 4080`. Pixels displayed upright without an EXIF orientation tag. Doorway/wall features near the preview edges remained in the saved framing with no unexpected crop. |
+| Landscape-left 4:3 preview/capture path | Passed after physically rotating and holding the handset landscape-left. Android reported a true `3120 × 1440` window at `ROTATION_270`; the preview was `1440 × 1080` (4:3), the grid stayed inside the preview, and Back, Done, zoom/reset, shutter, thumbnail, and count controls remained usable. The saved JPEG was `4080 × 3060`, displayed upright without an EXIF orientation tag, and preserved the preview's doorway/wall edge framing without an unexpected crop. |
+| Landscape-right 4:3 preview/capture path | Passed after physically rotating and holding the handset landscape-right. Android reported a true `3120 × 1440` window at `ROTATION_90`; the 4:3 preview and controls remained usable. The saved JPEG was `4080 × 3060`, displayed upright without an EXIF orientation tag, and preserved the preview's doorway/wall edge framing without an unexpected crop. |
+| Return to portrait | Passed. Physically rotating back restored the `1440 × 3120` Android window and 3:4 preview. |
+| Quick capture and persistence | Passed. Portrait, landscape-left, landscape-right, and a post-restart landscape capture completed; each capture returned to Ready and updated the session thumbnail/count. The first three files remained in app document storage with their SQLite-backed gallery rows across navigation and force-stop/reopen. The post-restart landscape JPEG was also `4080 × 3060`, upright, and matched the preview framing. |
+| Done / Android system Back → Gallery | Passed from a physically landscape camera. Both Done and the handset's system Back control returned to Shoot Gallery and immediately restored a `1440 × 3120` portrait window while the phone was still held landscape. |
+| Background → foreground in landscape | Passed. The app backgrounded from a true landscape camera window and resumed the same Quick Camera route at `3120 × 1440` with a live 4:3 preview, grid, and usable controls. |
+| Force-stop/reopen | Passed. A normal relaunch opened Shoots at `1440 × 3120` portrait, retained the existing gallery photos, and allowed another physically rotated landscape capture. |
+| Android rotation lock | Observed separately with portrait rotation lock enabled (`USER_ROTATION_LOCKED`, `ROTATION_0`). Quick Camera still followed physical rotation into a true `3120 × 1440` landscape window because its route requested Android `SCREEN_ORIENTATION_FULL_SENSOR`; Done restored the portrait gallery while the system lock remained enabled. Auto-rotate was restored after the observation. |
 
-No Quick Camera source behavior was changed for this spike. The landscape item
-requires a physically rotated-device retest before release confidence is claimed.
+This physical acceptance used handset rotation rather than ADB display-rotation
+commands. The app configuration used Expo orientation `default`, the root Stack
+kept its portrait default, and `shoot-camera` remained the `orientation: 'all'`
+route exception. CNG generated `MainActivity` with
+`android:screenOrientation="unspecified"` rather than a portrait lock. No Quick
+Camera source behavior was changed for this acceptance run.
 
 ## Android API guarantees
 
@@ -382,6 +392,4 @@ here.
 - Production level-indicator coordinate remapping, filtering, calibration, and
   green threshold; production movement-warning metric, time window, and
   threshold. This spike deliberately chooses none of them.
-- A valid physical landscape Quick Camera result. The existing portrait-only
-  app architecture was not changed in this PR.
 - iOS behavior and any server/order contract needed by future Balanced or Pro.
