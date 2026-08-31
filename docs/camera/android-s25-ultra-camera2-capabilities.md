@@ -264,7 +264,7 @@ production level or movement UI.
 | --- | --- |
 | Physical S25 Ultra preview opens | Passed in the existing Quick Camera route |
 | Portrait 3:4 preview/capture path | Passed; one Quick capture completed and reported `3060 × 4080` |
-| Landscape 4:3 preview/capture path | Not physically verified in this run; the route still declares `orientation: 'all'` and the existing preview uses `4/3`, but the connected handset remained portrait. Forced ADB rotation produced a letterboxed portrait app because of the existing app-level portrait manifest, so it was not treated as a valid landscape result. |
+| Landscape 4:3 preview/capture path | Not physically verified in this run. The app configuration now uses Expo orientation `default` while `shoot-camera` remains the `orientation: 'all'` route exception; CNG generated `MainActivity` with `android:screenOrientation="unspecified"` rather than a portrait lock. The physical S25 Ultra retest could not run from this host because Gradle debug assembly failed before compilation with `java.io.IOException: Unable to establish loopback connection`, and no ADB device could be enumerated. No landscape acceptance is claimed. |
 | Quick capture persistence after restart | Passed; the shoot photo count increased from 2 to 3 and remained 3 after relaunch |
 | Done → Gallery | Passed; Done returned to Shoot Gallery and the new photo was visible in the gallery count |
 
@@ -382,6 +382,7 @@ here.
 - Production level-indicator coordinate remapping, filtering, calibration, and
   green threshold; production movement-warning metric, time window, and
   threshold. This spike deliberately chooses none of them.
-- A valid physical landscape Quick Camera result. The existing portrait-only
-  app architecture was not changed in this PR.
+- A valid physical landscape Quick Camera result. The app-level orientation is
+  now CNG-generated as Android `unspecified`, but the required S25 Ultra
+  physical rotation retest remains pending.
 - iOS behavior and any server/order contract needed by future Balanced or Pro.
