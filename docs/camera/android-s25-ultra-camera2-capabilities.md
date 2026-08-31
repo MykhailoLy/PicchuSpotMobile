@@ -108,6 +108,19 @@ advertised burst path completed, not evidence of a production exposure bracket:
 the diagnostic burst used AE-on requests and the result remained in AE
 `SEARCHING`.
 
+### Quick Camera regression
+
+| Check | Result |
+| --- | --- |
+| Physical S25 Ultra preview opens | Passed in the existing Quick Camera route |
+| Portrait 3:4 preview/capture path | Passed; one Quick capture completed and reported `3060 × 4080` |
+| Landscape 4:3 preview/capture path | Not physically verified in this run; the route still declares `orientation: 'all'` and the existing preview uses `4/3`, but the connected handset remained portrait. Forced ADB rotation produced a letterboxed portrait app because of the existing app-level portrait manifest, so it was not treated as a valid landscape result. |
+| Quick capture persistence after restart | Passed; the shoot photo count increased from 2 to 3 and remained 3 after relaunch |
+| Done → Gallery | Passed; Done returned to Shoot Gallery and the new photo was visible in the gallery count |
+
+No Quick Camera source behavior was changed for this spike. The landscape item
+requires a physically rotated-device retest before release confidence is claimed.
+
 ## Android API guarantees
 
 These are platform-contract statements, not S25 Ultra measurements:
