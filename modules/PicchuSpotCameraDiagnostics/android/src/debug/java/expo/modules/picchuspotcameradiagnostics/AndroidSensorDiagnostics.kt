@@ -20,6 +20,7 @@ private const val TRANSITION_DURATION_MS = 1_500L
 private const val MOVEMENT_DURATION_MS = 3_000L
 private const val SENSOR_PROBE_TIMEOUT_PADDING_MS = 2_000L
 
+/** Development build sensor probe implementation. */
 internal class AndroidSensorDiagnostics(context: Context) {
   private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
 

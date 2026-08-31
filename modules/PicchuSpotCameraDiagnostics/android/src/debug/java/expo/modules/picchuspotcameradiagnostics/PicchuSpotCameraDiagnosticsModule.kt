@@ -49,6 +49,7 @@ private const val ZOOM_MINIMUM_OBSERVATION_FRAMES = 4
 private const val ZOOM_MINIMUM_OBSERVATION_MS = 750L
 private const val ZOOM_PHASE_TIMEOUT_MS = 3_000L
 
+/** Development build implementation; release registers an inert same-name stub. */
 class PicchuSpotCameraDiagnosticsModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("PicchuSpotCameraDiagnostics")

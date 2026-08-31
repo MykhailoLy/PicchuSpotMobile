@@ -23,6 +23,12 @@ app-private cache report. The module does not use Samsung or other
 vendor-private APIs, change the existing Quick Camera implementation, write
 Shoot SQLite rows, write Gallery media, or upload anything.
 
+Android source sets enforce the development-only boundary at compile time: the
+full Camera2 and Sensor implementation is in `src/debug/java`. The release
+variant contains only a same-name Expo module registration stub that returns
+`diagnostics-unavailable-in-release`; it has no Camera2 session, sensor
+collection, report-writing, or probe implementation.
+
 ## How to collect evidence
 
 1. Build and install the Android development build from this branch on the
@@ -141,6 +147,19 @@ Representative and complete output-size lists from the same run:
 | Temporary sequential manual three-request probe | All 3 completed. Requested exposure times `14,997,117`, `29,994,234`, `59,988,468 ns` at ISO `1,717`; actual times matched and ISO was `1,708` for all three |
 | Diagnostic manual `captureBurst` | Both required capabilities were advertised. All `3/3` requests completed in request order with failures `0`; details and timings are below. |
 | Temporary AE-on Camera2 burst | `BURST_CAPTURE` completed `3/3`, failures `0`; sensor intervals `33.403125 ms`, `33.402917 ms`; completion intervals `45.902969 ms`, `34.063125 ms`; AE remained `SEARCHING` |
+
+#### AE ISO observation
+
+The `+2 EV` value of ISO `6,773` is measured auto-exposure behavior from the
+logical-camera YUV result, even though that logical camera advertises a manual
+`SENSOR_INFO_SENSITIVITY_RANGE` ending at ISO `3,200`. Neither value is
+corrected or treated as a contradiction in this evidence record. The measured
+AE value must not be assumed to be an equivalent manual
+`SENSOR_SENSITIVITY` request: processed AE/YUV behavior may include additional
+pipeline gain, such as post-RAW sensitivity boost or other HAL-managed
+processing. Future Balanced-versus-Pro tests must compare image
+brightness/noise rather than assume that AE and manual ISO values are
+interchangeable. This is not a Samsung-specific explanation.
 
 The manual `captureBurst` used temporary diagnostic multipliers only; it does
 not propose a product count or EV spacing:
