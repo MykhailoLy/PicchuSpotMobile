@@ -13,21 +13,43 @@ export default function AccountScreen() {
         </Text>
 
         {__DEV__ && (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push('/camera-diagnostics' as Href)}
-            style={({ pressed }) => [
-              styles.diagnosticsButton,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.diagnosticsKicker}>DEVELOPMENT ONLY</Text>
-            <Text style={styles.diagnosticsTitle}>Camera2 diagnostics</Text>
-            <Text style={styles.diagnosticsBody}>
-              Inspect rear-camera capabilities and run the temporary native
-              feasibility probes.
-            </Text>
-          </Pressable>
+          <View style={styles.developmentTools}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/camera-diagnostics' as Href)}
+              style={({ pressed }) => [
+                styles.diagnosticsButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.diagnosticsKicker}>DEVELOPMENT ONLY</Text>
+              <Text style={styles.diagnosticsTitle}>Camera2 diagnostics</Text>
+              <Text style={styles.diagnosticsBody}>
+                Inspect rear-camera capabilities and run the temporary native
+                feasibility probes.
+              </Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={() =>
+                router.push('/balanced-capture-prototype' as Href)
+              }
+              style={({ pressed }) => [
+                styles.diagnosticsButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.diagnosticsKicker}>DEVELOPMENT ONLY</Text>
+              <Text style={styles.diagnosticsTitle}>
+                Balanced capture prototype
+              </Text>
+              <Text style={styles.diagnosticsBody}>
+                Compare real Camera2 AE JPEG sequencing with a manual Camera2
+                JPEG burst. This does not alter Quick capture.
+              </Text>
+            </Pressable>
+          </View>
         )}
       </View>
     </SafeAreaView>
@@ -64,12 +86,15 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   diagnosticsButton: {
-    marginTop: 36,
     padding: 18,
     borderWidth: 1,
     borderColor: '#DED3C6',
     borderRadius: 16,
     backgroundColor: '#F4EFE8',
+  },
+  developmentTools: {
+    marginTop: 36,
+    gap: 12,
   },
   diagnosticsKicker: {
     color: '#C7A94E',

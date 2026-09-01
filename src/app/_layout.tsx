@@ -47,6 +47,15 @@ export default function RootLayout() {
             orientation: 'portrait',
           }}
         />
+
+        <Stack.Screen
+          name="balanced-capture-prototype"
+          options={{
+            animation: 'fade',
+            gestureEnabled: false,
+            orientation: 'all',
+          }}
+        />
       </Stack>
     </>
   );
