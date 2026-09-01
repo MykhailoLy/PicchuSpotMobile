@@ -169,3 +169,70 @@ export type BalancedPrototypeComparison = {
   };
   failure: string | null;
 };
+
+export type BalancedCompatibilityClassification =
+  | 'FULL_BALANCED'
+  | 'LIMITED'
+  | 'UNSUPPORTED';
+
+export type BalancedCompatibilityInventory = {
+  schemaVersion: number;
+  kind: 'android-balanced-compatibility-inventory' | 'android-balanced-compatibility-probe';
+  status?: 'failed';
+  capturedAtUtc?: string;
+  device?: {
+    manufacturer: string;
+    model: string;
+    androidRelease: string;
+    apiLevel: number;
+    buildFingerprint: string;
+  };
+  candidate?: Record<string, unknown>;
+  cameraTopology?: {
+    rearCameraIds: string[];
+    selectedRearLogicalCameraId: string | null;
+    selectedBy: string;
+    cameras: Array<Record<string, unknown>>;
+  };
+  selectedJpegSize?: {
+    width: number;
+    height: number;
+  };
+  sensors?: {
+    gyroscopeAvailable: boolean;
+    linearAccelerationAvailable: boolean;
+  };
+  staticEvaluation?: {
+    status: 'passed' | 'failed';
+    requiredContractPassed: boolean;
+    reasons: string[];
+    requiredRules: string[];
+    diagnosticOnly: string[];
+  };
+  failure?: string;
+};
+
+export type BalancedCompatibilityProbeReport =
+  BalancedCompatibilityInventory & {
+    kind: 'android-balanced-compatibility-probe';
+    runtimeValidation: Record<string, unknown>;
+    classification: {
+      status: BalancedCompatibilityClassification;
+      reasons: string[];
+    };
+    storage: {
+      directory: string;
+      evidenceFilename: string;
+      filesAreCacheOnly: true;
+      galleryWrite: false;
+      shootSqliteWrite: false;
+      upload: false;
+    };
+  };
+
+export type LocalCompatibilityProbeEvidence = {
+  status: 'available' | 'missing' | 'failed' | 'unavailable-in-release';
+  filename: string | null;
+  json: string | null;
+  failure: string | null;
+};

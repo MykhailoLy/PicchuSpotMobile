@@ -25,6 +25,22 @@ class PicchuSpotBalancedPrototypeModule : Module() {
     AsyncFunction("runExperimentAsync").SuspendBody<Map<String, Any?>> {
       unavailable("runExperimentAsync")
     }
+    AsyncFunction("inspectCompatibilityAsync").SuspendBody<Map<String, Any?>> {
+      unavailable("inspectCompatibilityAsync")
+    }
+    AsyncFunction("runCompatibilityProbeAsync").SuspendBody<Map<String, Any?>> {
+      unavailable("runCompatibilityProbeAsync")
+    }
+    AsyncFunction("readLatestCompatibilityProbeAsync").SuspendBody<Map<String, Any?>> {
+      unavailable("readLatestCompatibilityProbeAsync")
+    }
+    AsyncFunction("clearCompatibilityProbeFilesAsync").SuspendBody<Map<String, Any?>> {
+      mapOf(
+        "status" to "unavailable-in-release",
+        "removedFileCount" to 0,
+        "failure" to "The Balanced compatibility probe is not included in release builds.",
+      )
+    }
     AsyncFunction("clearPrototypeFilesAsync").SuspendBody<Map<String, Any?>> {
       mapOf(
         "status" to "unavailable-in-release",

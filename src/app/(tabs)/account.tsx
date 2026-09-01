@@ -49,6 +49,26 @@ export default function AccountScreen() {
                 JPEG burst. This does not alter Quick capture.
               </Text>
             </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={() =>
+                router.push('/balanced-compatibility-probe' as Href)
+              }
+              style={({ pressed }) => [
+                styles.diagnosticsButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.diagnosticsKicker}>DEVELOPMENT ONLY</Text>
+              <Text style={styles.diagnosticsTitle}>
+                Balanced compatibility probe
+              </Text>
+              <Text style={styles.diagnosticsBody}>
+                Validate the current manual Camera2 candidate from actual
+                capability data and one temporary JPEG burst.
+              </Text>
+            </Pressable>
           </View>
         )}
       </View>

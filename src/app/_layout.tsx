@@ -56,6 +56,13 @@ export default function RootLayout() {
             orientation: 'all',
           }}
         />
+        <Stack.Screen
+          name="balanced-compatibility-probe"
+          options={{
+            animation: 'slide_from_right',
+            orientation: 'portrait',
+          }}
+        />
       </Stack>
     </>
   );

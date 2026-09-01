@@ -57,6 +57,32 @@ class PicchuSpotBalancedPrototypeModule : Module() {
       )
     }
 
+    AsyncFunction("inspectCompatibilityAsync").SuspendBody<Map<String, Any?>> {
+      activePreview.get()?.inspectCompatibility() ?: mapOf(
+        "schemaVersion" to 1,
+        "kind" to "android-balanced-compatibility-inventory",
+        "status" to "failed",
+        "failure" to "Mount the development-only Camera2 preview before inspecting compatibility.",
+      )
+    }
+
+    AsyncFunction("runCompatibilityProbeAsync").SuspendBody<Map<String, Any?>> {
+      activePreview.get()?.runCompatibilityProbe() ?: mapOf(
+        "schemaVersion" to 1,
+        "kind" to "android-balanced-compatibility-probe",
+        "status" to "failed",
+        "failure" to "Mount the development-only Camera2 preview before running the compatibility probe.",
+      )
+    }
+
+    AsyncFunction("readLatestCompatibilityProbeAsync").SuspendBody<Map<String, Any?>> {
+      readLatestCompatibilityReport(appContext.cacheDirectory)
+    }
+
+    AsyncFunction("clearCompatibilityProbeFilesAsync").SuspendBody<Map<String, Any?>> {
+      clearCompatibilityProbeDirectory(appContext.cacheDirectory)
+    }
+
     AsyncFunction("clearPrototypeFilesAsync").SuspendBody<Map<String, Any?>> {
       clearPrototypeDirectory(appContext.cacheDirectory)
     }
