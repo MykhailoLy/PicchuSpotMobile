@@ -3,6 +3,8 @@ package expo.modules.picchuspotbalancedprototype
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.ImageFormat
 import android.graphics.Matrix
 import android.graphics.SurfaceTexture
@@ -41,8 +43,11 @@ import java.util.Locale
 import java.util.TimeZone
 import org.json.JSONObject
 import kotlin.math.abs
+import kotlin.math.ln
 import kotlin.math.max
+import kotlin.math.roundToLong
 import kotlin.math.sqrt
+import kotlin.math.roundToInt
 
 /**
  * A real Camera2-owned preview and a deliberately development-only comparison
@@ -97,6 +102,9 @@ class BalancedCapturePreview(context: Context, appContext: AppContext) : ExpoVie
   fun status(): Map<String, Any?> = controller.status()
 
   fun runComparison(): Map<String, Any?> = controller.runComparison()
+
+  fun runExperiment(candidateId: String, plannerId: String): Map<String, Any?> =
+    controller.runExperiment(candidateId, plannerId)
 
   private fun emitStatus(status: String, message: String?) {
     val payload = mutableMapOf<String, Any>("status" to status)
@@ -201,8 +209,17 @@ private class BalancedPrototypeCamera(
 
   override fun onSurfaceTextureUpdated(surface: SurfaceTexture) = Unit
 
-  fun runComparison(): Map<String, Any?> {
+  fun runComparison(): Map<String, Any?> = runExperiment(
+    candidateId = BRACKET_CANDIDATE_A.id,
+    plannerId = EXPOSURE_PLANNER_MANUAL_RANGE.id,
+  )
+
+  fun runExperiment(candidateId: String, plannerId: String): Map<String, Any?> {
     synchronized(captureMonitor) {
+      val candidate = bracketCandidate(candidateId)
+        ?: return failedComparison("Unknown manual bracket candidate: $candidateId.")
+      val planner = exposurePlanner(plannerId)
+        ?: return failedComparison("Unknown temporary exposure planner: $plannerId.")
       if (!awaitPreviewReady()) {
         return failedComparison("The Camera2 preview is not ready: ${lifecycleMessage ?: "unknown error"}")
       }
@@ -212,13 +229,13 @@ private class BalancedPrototypeCamera(
         ?: return failedComparison("Camera characteristics are unavailable.")
       val jpegSize = selectedJpegSize
         ?: return failedComparison("No practical 4:3 Camera2 JPEG size is available.")
-      val evidenceFilename = "comparison-${SystemClock.elapsedRealtimeNanos()}.json"
+      val evidenceFilename = "experiment-${candidate.id}-${planner.id}-${SystemClock.elapsedRealtimeNanos()}.json"
 
-      setStatus("capturing", "Capturing temporary AE and manual Camera2 comparison sets…")
+      setStatus("capturing", "Capturing ${candidate.label} with ${planner.label}…")
       val motion = PublicMotionRecorder(context)
       motion.start()
       var focusWhiteBalance: Map<String, Any?> = emptyMap()
-      var aeExecution = StrategyExecution.unavailable("The AE sequence was not started.")
+      var aeBaseline = StrategyExecution.unavailable("The AE baseline control was not started.")
       var manualExecution = StrategyExecution.unavailable("The manual burst was not started.")
       var failure: String? = null
 
@@ -228,32 +245,36 @@ private class BalancedPrototypeCamera(
           activeSession,
           activeCharacteristics,
         )
-        val aeStart = SystemClock.elapsedRealtimeNanos()
-        aeExecution = captureAeSequence(
+        val aeBaselineStart = SystemClock.elapsedRealtimeNanos()
+        aeBaseline = captureAeBaseline(
           activeCamera,
           activeSession,
           activeCharacteristics,
         )
-        val aeEnd = SystemClock.elapsedRealtimeNanos()
-        val baseline = aeExecution.frames.firstOrNull { it.plan.label == "0 EV" }
+        val aeBaselineEnd = aeBaseline.finishedAtNs ?: SystemClock.elapsedRealtimeNanos()
+        val baseline = aeBaseline.frames.firstOrNull { it.plan.label == "0 EV baseline" }
         val manualStart = SystemClock.elapsedRealtimeNanos()
         manualExecution = captureManualBurst(
           activeCamera,
           activeSession,
           activeCharacteristics,
           baseline,
+          candidate,
+          planner,
         )
-        val manualEnd = SystemClock.elapsedRealtimeNanos()
+        val manualEnd = manualExecution.finishedAtNs ?: SystemClock.elapsedRealtimeNanos()
 
         val result = comparisonMap(
           activeCharacteristics,
           jpegSize,
           focusWhiteBalance,
-          aeExecution,
+          aeBaseline,
           manualExecution,
+          candidate,
+          planner,
           mapOf(
             "timestampBasis" to "SensorEvent.timestamp and SystemClock.elapsedRealtimeNanos are nanoseconds since boot.",
-            "aeSequence" to motion.window(aeStart, aeEnd),
+            "aeBaseline" to motion.window(aeBaselineStart, aeBaselineEnd),
             "manualBurst" to motion.window(manualStart, manualEnd),
           ),
           failure,
@@ -267,8 +288,10 @@ private class BalancedPrototypeCamera(
           activeCharacteristics,
           jpegSize,
           focusWhiteBalance,
-          aeExecution,
+          aeBaseline,
           manualExecution,
+          candidate,
+          planner,
           mapOf("failure" to "Movement windows were not completed: $failure"),
           failure,
           evidenceFilename,
@@ -314,7 +337,7 @@ private class BalancedPrototypeCamera(
       characteristics = cameraCharacteristics
       surfaceTexture.setDefaultBufferSize(previewSize.width, previewSize.height)
       updatePreviewTransform()
-      imageReader = ImageReader.newInstance(jpegSize.width, jpegSize.height, ImageFormat.JPEG, 4).also { reader ->
+      imageReader = ImageReader.newInstance(jpegSize.width, jpegSize.height, ImageFormat.JPEG, 6).also { reader ->
         reader.setOnImageAvailableListener({ availableReader -> drainImages(availableReader) }, handler)
       }
       manager.openCamera(cameraId, cameraStateCallback, handler)
@@ -487,6 +510,63 @@ private class BalancedPrototypeCamera(
     )
   }
 
+  /**
+   * This one-frame AE control supplies the current scene baseline for a manual
+   * experiment. The slower three-point sequential AE reference remains in
+   * [captureAeSequence] for Issue #15 evidence; it is not repeated for every
+   * manual policy run.
+   */
+  private fun captureAeBaseline(
+    activeCamera: CameraDevice,
+    activeSession: CameraCaptureSession,
+    activeCharacteristics: CameraCharacteristics,
+  ): StrategyExecution {
+    val started = SystemClock.elapsedRealtimeNanos()
+    val plan = CapturePlan(
+      requestIndex = 0,
+      label = "0 EV baseline",
+      requested = mapOf(
+        "strategy" to "ae-baseline-control",
+        "controlAeMode" to "ON",
+        "aeRequestedEv" to 0.0,
+        "aeCompensationIndex" to controls.aeCompensation,
+        "afMode" to afModeName(controls.afMode),
+        "awbLock" to controls.awbLocked,
+        "zoomRatio" to effectiveZoomRatio(),
+        "jpegOrientationDegrees" to jpegOrientation(activeCharacteristics),
+      ),
+    )
+    val stable = previewTracker.awaitStable(
+      expectedCompensation = controls.aeCompensation,
+      requireAfLock = controls.afMode == CaptureRequest.CONTROL_AF_MODE_AUTO,
+      requireAwbLock = controls.awbLocked,
+    )
+    val frame = if (stable.status == "stable") {
+      captureOne(activeCamera, activeSession, activeCharacteristics, plan, controls)
+    } else {
+      CapturedFrame.failed(plan, "AE/AF/AWB did not reach the temporary stability criteria before timeout.")
+    }
+    val captureFinishedAtNs = SystemClock.elapsedRealtimeNanos()
+    val measuredFrame = frame.withSourceMetrics()
+    return StrategyExecution(
+      status = if (measuredFrame.failure == null) "completed" else "partial",
+      label = "One-frame AE 0 EV baseline control",
+      startedAtNs = started,
+      finishedAtNs = captureFinishedAtNs,
+      plans = listOf(plan),
+      frames = listOf(measuredFrame),
+      convergence = listOf(
+        mapOf(
+          "label" to plan.label,
+          "framesObserved" to stable.framesObserved,
+          "elapsedMs" to stable.elapsedMs,
+          "status" to stable.status,
+        ),
+      ),
+      failure = measuredFrame.failure,
+    )
+  }
+
   private fun captureAeSequence(
     activeCamera: CameraDevice,
     activeSession: CameraCaptureSession,
@@ -560,6 +640,8 @@ private class BalancedPrototypeCamera(
     activeSession: CameraCaptureSession,
     activeCharacteristics: CameraCharacteristics,
     baseline: CapturedFrame?,
+    candidate: BracketCandidate,
+    planner: ExposurePlanner,
   ): StrategyExecution {
     val capabilities = activeCharacteristics.get(
       CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES,
@@ -579,33 +661,17 @@ private class BalancedPrototypeCamera(
     val isoRange = activeCharacteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
       ?: return StrategyExecution.unavailable("Camera2 does not advertise a manual ISO range.")
 
-    val multipliers = listOf(0.25, 1.0, 4.0)
-    val labels = listOf("-2 EV", "0 EV", "+2 EV")
-    val plans = multipliers.mapIndexed { index, multiplier ->
-      val desiredExposure = (baselineExposure * multiplier).toLong().coerceAtLeast(1L)
-      val exposure = desiredExposure.coerceIn(exposureRange.lower, exposureRange.upper)
-      val desiredIso = ((baselineExposure.toDouble() * baselineIso * multiplier) / exposure)
-        .toInt()
-        .coerceAtLeast(1)
-      val iso = desiredIso.coerceIn(isoRange.lower, isoRange.upper)
-      CapturePlan(
+    val plans = candidate.evOffsets.mapIndexed { index, targetEv ->
+      manualCapturePlan(
         requestIndex = index,
-        label = labels[index],
-        requested = mapOf(
-          "strategy" to "manual-capture-burst",
-          "controlAeMode" to "OFF",
-          "sensorExposureTimeNs" to exposure,
-          "sensorSensitivityIso" to iso,
-          "aeBaselineExposureTimeNs" to baselineExposure,
-          "aeBaselineIso" to baselineIso,
-          "diagnosticEvMultiplier" to multiplier,
-          "exposureTimeClamped" to (exposure != desiredExposure),
-          "sensitivityClamped" to (iso != desiredIso),
-          "afMode" to afModeName(controls.afMode),
-          "awbLock" to controls.awbLocked,
-          "zoomRatio" to effectiveZoomRatio(),
-          "jpegOrientationDegrees" to jpegOrientation(activeCharacteristics),
-        ),
+        targetEv = targetEv,
+        baselineExposureNs = baselineExposure,
+        baselineIso = baselineIso,
+        exposureRange = exposureRange,
+        isoRange = isoRange,
+        activeCharacteristics = activeCharacteristics,
+        candidate = candidate,
+        planner = planner,
       )
     }
     val started = SystemClock.elapsedRealtimeNanos()
@@ -617,15 +683,17 @@ private class BalancedPrototypeCamera(
       }
       activeSession.captureBurst(requests, collector.callback, handler)
       val frames = collector.await()
+      val captureFinishedAtNs = SystemClock.elapsedRealtimeNanos()
+      val measuredFrames = frames.map(CapturedFrame::withSourceMetrics)
       return StrategyExecution(
-        status = if (frames.all { it.failure == null }) "completed" else "partial",
-        label = "Manual Camera2 captureBurst() full-resolution JPEG capture",
+        status = if (measuredFrames.all { it.failure == null }) "completed" else "partial",
+        label = "${candidate.label} · ${planner.label} · manual Camera2 captureBurst()",
         startedAtNs = started,
-        finishedAtNs = SystemClock.elapsedRealtimeNanos(),
+        finishedAtNs = captureFinishedAtNs,
         plans = plans,
-        frames = frames,
+        frames = measuredFrames,
         convergence = emptyList(),
-        failure = frames.firstOrNull { it.failure != null }?.failure,
+        failure = measuredFrames.firstOrNull { it.failure != null }?.failure,
       )
     } catch (error: Throwable) {
       return StrategyExecution.failed(
@@ -636,6 +704,79 @@ private class BalancedPrototypeCamera(
     } finally {
       activeCollector = null
     }
+  }
+
+  private fun manualCapturePlan(
+    requestIndex: Int,
+    targetEv: Double,
+    baselineExposureNs: Long,
+    baselineIso: Int,
+    exposureRange: Range<Long>,
+    isoRange: Range<Int>,
+    activeCharacteristics: CameraCharacteristics,
+    candidate: BracketCandidate,
+    planner: ExposurePlanner,
+  ): CapturePlan {
+    val multiplier = evMultiplier(targetEv)
+    val baselineProduct = baselineExposureNs.toDouble() * baselineIso
+    val targetProduct = baselineProduct * multiplier
+    val unboundedDesiredExposureNs = (baselineExposureNs * multiplier)
+      .roundToLong()
+      .coerceAtLeast(1L)
+    val sensorRangeExposureNs = unboundedDesiredExposureNs.coerceIn(
+      exposureRange.lower,
+      exposureRange.upper,
+    )
+    val positiveEvCeilingNs = if (targetEv > 0.0) planner.positiveEvShutterCeilingNs else null
+    val requestedExposureNs = if (positiveEvCeilingNs == null) {
+      sensorRangeExposureNs
+    } else {
+      minOf(sensorRangeExposureNs, positiveEvCeilingNs.coerceAtLeast(exposureRange.lower))
+    }
+    val desiredIso = targetProduct / requestedExposureNs
+    val requestedIso = desiredIso
+      .roundToInt()
+      .coerceIn(isoRange.lower, isoRange.upper)
+    val requestedProduct = requestedExposureNs.toDouble() * requestedIso
+    val plannedEv = evOffsetFromExposureProduct(requestedProduct, baselineProduct)
+    val shutterClampedToSensorRange = sensorRangeExposureNs != unboundedDesiredExposureNs
+    val shutterCappedForExperiment = positiveEvCeilingNs != null &&
+      requestedExposureNs < sensorRangeExposureNs
+
+    return CapturePlan(
+      requestIndex = requestIndex,
+      label = evLabel(targetEv),
+      requested = mapOf(
+        "strategy" to "manual-capture-burst",
+        "candidateId" to candidate.id,
+        "candidateLabel" to candidate.label,
+        "plannerId" to planner.id,
+        "plannerLabel" to planner.label,
+        "controlAeMode" to "OFF",
+        "requestedEv" to targetEv,
+        "evMultiplier" to multiplier,
+        "aeBaselineExposureTimeNs" to baselineExposureNs,
+        "aeBaselineIso" to baselineIso,
+        "unboundedDesiredExposureTimeNs" to unboundedDesiredExposureNs,
+        "sensorRangeRequestedExposureTimeNs" to sensorRangeExposureNs,
+        "positiveEvShutterCeilingNs" to positiveEvCeilingNs,
+        "sensorExposureTimeNs" to requestedExposureNs,
+        "desiredSensitivityIso" to desiredIso,
+        "sensorSensitivityIso" to requestedIso,
+        "targetExposureProductTimeIso" to targetProduct,
+        "plannedExposureProductTimeIso" to requestedProduct,
+        "plannedEv" to plannedEv,
+        "unmetEvAfterPlanning" to (targetEv - plannedEv),
+        "exposureTimeClamped" to (requestedExposureNs != unboundedDesiredExposureNs),
+        "shutterClampedToSensorRange" to shutterClampedToSensorRange,
+        "shutterCappedForExperiment" to shutterCappedForExperiment,
+        "sensitivityClamped" to (requestedIso.toDouble() != desiredIso.roundToInt().toDouble()),
+        "afMode" to afModeName(controls.afMode),
+        "awbLock" to controls.awbLocked,
+        "zoomRatio" to effectiveZoomRatio(),
+        "jpegOrientationDegrees" to jpegOrientation(activeCharacteristics),
+      ),
+    )
   }
 
   private fun captureOne(
@@ -841,20 +982,22 @@ private class BalancedPrototypeCamera(
     activeCharacteristics: CameraCharacteristics,
     jpegSize: Size,
     focusWhiteBalance: Map<String, Any?>,
-    aeExecution: StrategyExecution,
+    aeBaseline: StrategyExecution,
     manualExecution: StrategyExecution,
+    candidate: BracketCandidate,
+    planner: ExposurePlanner,
     movementWindows: Map<String, Any?>,
     failure: String?,
     evidenceFilename: String,
   ): Map<String, Any?> {
     val status = when {
       failure != null -> "failed"
-      aeExecution.status == "completed" && manualExecution.status == "completed" -> "completed"
+      aeBaseline.status == "completed" && manualExecution.status == "completed" -> "completed"
       else -> "partial"
     }
     return mapOf(
-      "schemaVersion" to 1,
-      "kind" to "android-balanced-capture-prototype",
+      "schemaVersion" to 2,
+      "kind" to "android-balanced-bracket-policy-experiment",
       "status" to status,
       "capturedAtUtc" to nowUtc(),
       "android" to androidInfo(),
@@ -866,8 +1009,12 @@ private class BalancedPrototypeCamera(
         "timestampSource" to timestampSourceName(activeCharacteristics.get(CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE)),
       ),
       "focusWhiteBalance" to focusWhiteBalance,
-      "aeSequence" to aeExecution.toMap(),
-      "manualBurst" to manualExecution.toMap(),
+      "aeBaseline" to aeBaseline.toMap(),
+      "manualExperiment" to mapOf(
+        "candidate" to candidate.toMap(),
+        "planner" to planner.toMap(),
+        "capture" to manualExecution.toMap(),
+      ),
       "movementWindows" to movementWindows,
       "storage" to mapOf(
         "directory" to PROTOTYPE_DIRECTORY,
@@ -882,8 +1029,8 @@ private class BalancedPrototypeCamera(
   }
 
   private fun failedComparison(reason: String): Map<String, Any?> = mapOf(
-    "schemaVersion" to 1,
-    "kind" to "android-balanced-capture-prototype",
+    "schemaVersion" to 2,
+    "kind" to "android-balanced-bracket-policy-experiment",
     "status" to "failed",
     "capturedAtUtc" to nowUtc(),
     "failure" to reason,
@@ -942,6 +1089,79 @@ private data class CapturePlan(
   val requested: Map<String, Any?>,
 )
 
+private data class BracketCandidate(
+  val id: String,
+  val label: String,
+  val evOffsets: List<Double>,
+) {
+  fun toMap(): Map<String, Any?> = mapOf(
+    "id" to id,
+    "label" to label,
+    "evOffsets" to evOffsets,
+    "temporaryExperimentOnly" to true,
+  )
+}
+
+private data class ExposurePlanner(
+  val id: String,
+  val label: String,
+  val positiveEvShutterCeilingNs: Long?,
+) {
+  fun toMap(): Map<String, Any?> = mapOf(
+    "id" to id,
+    "label" to label,
+    "positiveEvShutterCeilingNs" to positiveEvShutterCeilingNs,
+    "positiveEvShutterCeilingDescription" to when (positiveEvShutterCeilingNs) {
+      1_000_000_000L / 30L -> "approximately 1/30 s"
+      1_000_000_000L / 15L -> "approximately 1/15 s"
+      null -> "advertised manual sensor range only"
+      else -> "temporary experiment value"
+    },
+    "temporaryExperimentOnly" to true,
+  )
+}
+
+private val BRACKET_CANDIDATE_A = BracketCandidate(
+  id = "candidate-a-three-frame",
+  label = "Candidate A · 3 frames (-2 / 0 / +2 EV)",
+  evOffsets = listOf(-2.0, 0.0, 2.0),
+)
+
+private val BRACKET_CANDIDATE_B = BracketCandidate(
+  id = "candidate-b-five-frame",
+  label = "Candidate B · 5 frames (-2 / -1 / 0 / +1 / +2 EV)",
+  evOffsets = listOf(-2.0, -1.0, 0.0, 1.0, 2.0),
+)
+
+private val EXPOSURE_PLANNER_MANUAL_RANGE = ExposurePlanner(
+  id = "manual-range",
+  label = "Planner 1 · advertised manual range",
+  positiveEvShutterCeilingNs = null,
+)
+
+private val EXPOSURE_PLANNER_CAP_1_30 = ExposurePlanner(
+  id = "positive-ev-cap-1-30",
+  label = "Planner 2 · positive EV capped near 1/30 s",
+  positiveEvShutterCeilingNs = 1_000_000_000L / 30L,
+)
+
+private val EXPOSURE_PLANNER_CAP_1_15 = ExposurePlanner(
+  id = "positive-ev-cap-1-15",
+  label = "Planner 3 · positive EV capped near 1/15 s",
+  positiveEvShutterCeilingNs = 1_000_000_000L / 15L,
+)
+
+private fun bracketCandidate(id: String): BracketCandidate? = listOf(
+  BRACKET_CANDIDATE_A,
+  BRACKET_CANDIDATE_B,
+).firstOrNull { it.id == id }
+
+private fun exposurePlanner(id: String): ExposurePlanner? = listOf(
+  EXPOSURE_PLANNER_MANUAL_RANGE,
+  EXPOSURE_PLANNER_CAP_1_30,
+  EXPOSURE_PLANNER_CAP_1_15,
+).firstOrNull { it.id == id }
+
 private data class CaptureSnapshot(
   val exposureTimeNs: Long?,
   val iso: Int?,
@@ -958,28 +1178,41 @@ private data class CaptureSnapshot(
 ) {
   companion object {
     fun from(result: TotalCaptureResult): CaptureSnapshot = CaptureSnapshot(
-      exposureTimeNs = result.get(CaptureResult.SENSOR_EXPOSURE_TIME),
-      iso = result.get(CaptureResult.SENSOR_SENSITIVITY),
-      aeState = result.get(CaptureResult.CONTROL_AE_STATE),
-      afState = result.get(CaptureResult.CONTROL_AF_STATE),
-      awbState = result.get(CaptureResult.CONTROL_AWB_STATE),
+      exposureTimeNs = safeCaptureResultValue(result, CaptureResult.SENSOR_EXPOSURE_TIME),
+      iso = safeCaptureResultValue(result, CaptureResult.SENSOR_SENSITIVITY),
+      aeState = safeCaptureResultValue(result, CaptureResult.CONTROL_AE_STATE),
+      afState = safeCaptureResultValue(result, CaptureResult.CONTROL_AF_STATE),
+      awbState = safeCaptureResultValue(result, CaptureResult.CONTROL_AWB_STATE),
       zoomRatio = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        result.get(CaptureResult.CONTROL_ZOOM_RATIO)
+        safeCaptureResultValue(result, CaptureResult.CONTROL_ZOOM_RATIO)
       } else {
         null
       },
       activePhysicalCameraId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-        result.get(CaptureResult.LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_ID)
+        safeCaptureResultValue(result, CaptureResult.LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_ID)
       } else {
         null
       },
-      focalLengthMm = result.get(CaptureResult.LENS_FOCAL_LENGTH),
-      jpegOrientationDegrees = result.get(CaptureResult.JPEG_ORIENTATION),
-      sensorTimestampNs = result.get(CaptureResult.SENSOR_TIMESTAMP),
+      focalLengthMm = safeCaptureResultValue(result, CaptureResult.LENS_FOCAL_LENGTH),
+      jpegOrientationDegrees = safeCaptureResultValue(result, CaptureResult.JPEG_ORIENTATION),
+      sensorTimestampNs = safeCaptureResultValue(result, CaptureResult.SENSOR_TIMESTAMP),
       completionTimestampNs = SystemClock.elapsedRealtimeNanos(),
       frameNumber = result.frameNumber,
     )
   }
+}
+
+/**
+ * Some vendor result paths omit optional Camera2 metadata. Treat it as absent
+ * diagnostic data instead of failing an otherwise completed JPEG capture.
+ */
+private fun <T> safeCaptureResultValue(
+  result: TotalCaptureResult,
+  key: CaptureResult.Key<T>,
+): T? = try {
+  result.get(key)
+} catch (_: Throwable) {
+  null
 }
 
 private class PreviewTracker {
@@ -1130,6 +1363,7 @@ private class FrameCollector(
         height = image.height,
         byteSize = target.length(),
         sensorTimestampNs = image.timestamp,
+        localFile = target,
       )
     } catch (error: Throwable) {
       ImageFile.failure(image.timestamp, errorMessage(error))
@@ -1214,10 +1448,20 @@ private data class ImageFile(
   val height: Int?,
   val byteSize: Long?,
   val sensorTimestampNs: Long,
+  val sourceFrameMetrics: Map<String, Any?>? = null,
+  val localFile: File? = null,
   val failure: String? = null,
 ) {
   companion object {
-    fun failure(timestamp: Long, reason: String) = ImageFile(null, null, null, null, null, timestamp, reason)
+    fun failure(timestamp: Long, reason: String) = ImageFile(
+      fileUri = null,
+      filename = null,
+      width = null,
+      height = null,
+      byteSize = null,
+      sensorTimestampNs = timestamp,
+      failure = reason,
+    )
   }
 }
 
@@ -1233,6 +1477,15 @@ private data class CapturedFrame(
     fun failed(plan: CapturePlan, reason: String) = CapturedFrame(plan, null, null, null, null, reason)
   }
 
+  fun withSourceMetrics(): CapturedFrame {
+    val source = image ?: return this
+    val measured = source.localFile?.let(::measureSourceFrameMetrics) ?: mapOf(
+      "status" to "unavailable",
+      "failure" to "The prototype JPEG file is unavailable for source-frame analysis.",
+    )
+    return copy(image = source.copy(sourceFrameMetrics = measured))
+  }
+
   fun toMap(): Map<String, Any?> {
     val imageFailure = image?.failure
     val actualFailure = failure ?: imageFailure
@@ -1246,6 +1499,7 @@ private data class CapturedFrame(
       "width" to image?.width,
       "height" to image?.height,
       "byteSize" to image?.byteSize,
+      "sourceFrameMetrics" to image?.sourceFrameMetrics,
       "imageAssociation" to imageAssociation,
       "jpegOrientationDegrees" to result?.jpegOrientationDegrees,
       "requested" to plan.requested,
@@ -1271,6 +1525,119 @@ private data class CapturedFrame(
       "failure" to actualFailure,
     )
   }
+}
+
+/**
+ * Read-only, reduced-resolution JPEG measurements for the diagnostic evidence.
+ * These values are deliberately descriptive rather than a perceptual-quality
+ * score: JPEG processing, scene content, noise, and framing can all affect
+ * them. The source JPEG is never rewritten or enhanced.
+ */
+private fun measureSourceFrameMetrics(file: File): Map<String, Any?> = try {
+  val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+  BitmapFactory.decodeFile(file.absolutePath, bounds)
+  if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+    throw IllegalStateException("Android could not read JPEG dimensions for source metrics.")
+  }
+
+  var sampleSize = 1
+  while (max(bounds.outWidth / sampleSize, bounds.outHeight / sampleSize) > 512) {
+    sampleSize *= 2
+  }
+  val decodeOptions = BitmapFactory.Options().apply {
+    inSampleSize = sampleSize
+    inPreferredConfig = Bitmap.Config.ARGB_8888
+  }
+  val bitmap = BitmapFactory.decodeFile(file.absolutePath, decodeOptions)
+    ?: throw IllegalStateException("Android could not decode the JPEG for source metrics.")
+
+  try {
+    val width = bitmap.width
+    val height = bitmap.height
+    val pixels = IntArray(width * height)
+    val luminance = IntArray(pixels.size)
+    bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+    val histogram = IntArray(16)
+    var nearBlackCount = 0
+    var nearWhiteCount = 0
+    var gradientTotal = 0L
+    var gradientSamples = 0
+
+    pixels.forEachIndexed { index, pixel ->
+      val red = pixel shr 16 and 0xFF
+      val green = pixel shr 8 and 0xFF
+      val blue = pixel and 0xFF
+      val value = (54 * red + 183 * green + 19 * blue + 128) shr 8
+      luminance[index] = value
+      histogram[(value * histogram.size) / 256] += 1
+      if (value <= 8) nearBlackCount += 1
+      if (value >= 247) nearWhiteCount += 1
+      if (index % width != 0) {
+        gradientTotal += abs(value - luminance[index - 1]).toLong()
+        gradientSamples += 1
+      }
+      if (index >= width) {
+        gradientTotal += abs(value - luminance[index - width]).toLong()
+        gradientSamples += 1
+      }
+    }
+
+    luminance.sort()
+    fun percentile(fraction: Double): Int {
+      val index = (luminance.lastIndex * fraction).roundToInt().coerceIn(0, luminance.lastIndex)
+      return luminance[index]
+    }
+    val pixelCount = luminance.size
+    mapOf(
+      "status" to "measured",
+      "method" to "Read-only sampled JPEG decode; sRGB luma, 16-bin histogram, and adjacent-pixel luma-gradient proxy.",
+      "sourceDimensions" to mapOf("width" to bounds.outWidth, "height" to bounds.outHeight),
+      "analysisDimensions" to mapOf("width" to width, "height" to height),
+      "inSampleSize" to sampleSize,
+      "pixelsAnalyzed" to pixelCount,
+      "nearBlack" to mapOf(
+        "thresholdLumaInclusive" to 8,
+        "pixelCount" to nearBlackCount,
+        "percentage" to nearBlackCount * 100.0 / pixelCount,
+      ),
+      "nearWhite" to mapOf(
+        "thresholdLumaInclusive" to 247,
+        "pixelCount" to nearWhiteCount,
+        "percentage" to nearWhiteCount * 100.0 / pixelCount,
+      ),
+      "luminancePercentiles" to mapOf(
+        "p01" to percentile(0.01),
+        "p05" to percentile(0.05),
+        "p50" to percentile(0.50),
+        "p95" to percentile(0.95),
+        "p99" to percentile(0.99),
+      ),
+      "luminanceHistogram16" to histogram.mapIndexed { bin, count ->
+        mapOf(
+          "lowerInclusive" to bin * 16,
+          "upperInclusive" to bin * 16 + 15,
+          "pixelCount" to count,
+          "percentage" to count * 100.0 / pixelCount,
+        )
+      },
+      "detailProxy" to mapOf(
+        "name" to "mean-absolute-adjacent-luminance-gradient",
+        "value" to if (gradientSamples == 0) null else gradientTotal.toDouble() / gradientSamples,
+        "comparisonCount" to gradientSamples,
+        "note" to "A descriptive high-frequency proxy only; it can increase with texture or noise and is not a sharpness score.",
+      ),
+      "sourceModified" to false,
+      "failure" to null,
+    )
+  } finally {
+    bitmap.recycle()
+  }
+} catch (error: Throwable) {
+  mapOf(
+    "status" to "unavailable",
+    "failure" to errorMessage(error),
+    "sourceModified" to false,
+  )
 }
 
 private data class StrategyExecution(
@@ -1467,6 +1834,16 @@ private fun isAwbStable(state: Int?, requireLock: Boolean): Boolean = if (requir
 
 private fun intervalsMs(timestamps: List<Long>): List<Double> = timestamps.zipWithNext { first, second ->
   (second - first) / 1_000_000.0
+}
+
+private fun evMultiplier(ev: Double): Double = Math.pow(2.0, ev)
+
+private fun evOffsetFromExposureProduct(product: Double, baselineProduct: Double): Double =
+  if (product <= 0.0 || baselineProduct <= 0.0) Double.NaN else ln(product / baselineProduct) / ln(2.0)
+
+private fun evLabel(ev: Double): String {
+  val magnitude = if (ev == ev.roundToInt().toDouble()) ev.roundToInt().toString() else ev.toString()
+  return "${if (ev > 0) "+" else ""}$magnitude EV"
 }
 
 private fun sizeMap(size: Size): Map<String, Int> = mapOf("width" to size.width, "height" to size.height)

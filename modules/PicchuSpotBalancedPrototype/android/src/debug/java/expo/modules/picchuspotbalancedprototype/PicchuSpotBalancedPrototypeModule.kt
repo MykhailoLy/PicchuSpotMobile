@@ -51,14 +51,20 @@ class PicchuSpotBalancedPrototypeModule : Module() {
       )
     }
 
+    AsyncFunction("runExperimentAsync").SuspendBody { candidateId: String, plannerId: String ->
+      activePreview.get()?.runExperiment(candidateId, plannerId) ?: failedResult(
+        "The development-only Camera2 preview is not mounted.",
+      )
+    }
+
     AsyncFunction("clearPrototypeFilesAsync").SuspendBody<Map<String, Any?>> {
       clearPrototypeDirectory(appContext.cacheDirectory)
     }
   }
 
   private fun failedResult(reason: String): Map<String, Any?> = mapOf(
-    "schemaVersion" to 1,
-    "kind" to "android-balanced-capture-prototype",
+    "schemaVersion" to 2,
+    "kind" to "android-balanced-bracket-policy-experiment",
     "status" to "failed",
     "failure" to reason,
   )

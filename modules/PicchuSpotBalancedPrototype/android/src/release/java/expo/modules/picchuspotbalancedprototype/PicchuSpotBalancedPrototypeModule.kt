@@ -22,6 +22,9 @@ class PicchuSpotBalancedPrototypeModule : Module() {
     AsyncFunction("runComparisonAsync").SuspendBody<Map<String, Any?>> {
       unavailable("runComparisonAsync")
     }
+    AsyncFunction("runExperimentAsync").SuspendBody<Map<String, Any?>> {
+      unavailable("runExperimentAsync")
+    }
     AsyncFunction("clearPrototypeFilesAsync").SuspendBody<Map<String, Any?>> {
       mapOf(
         "status" to "unavailable-in-release",
@@ -32,7 +35,7 @@ class PicchuSpotBalancedPrototypeModule : Module() {
   }
 
   private fun unavailable(operation: String): Map<String, Any?> = mapOf(
-    "schemaVersion" to 1,
+    "schemaVersion" to 2,
     "kind" to "android-balanced-capture-prototype-release-stub",
     "status" to "unavailable-in-release",
     "operation" to operation,

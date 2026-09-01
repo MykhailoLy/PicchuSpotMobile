@@ -8,6 +8,15 @@ export type PrototypeStatus =
   | 'error'
   | 'unavailable-in-release';
 
+export type ManualBracketCandidateId =
+  | 'candidate-a-three-frame'
+  | 'candidate-b-five-frame';
+
+export type TemporaryExposurePlannerId =
+  | 'manual-range'
+  | 'positive-ev-cap-1-30'
+  | 'positive-ev-cap-1-15';
+
 export type BalancedPrototypePreviewProps = ViewProps & {
   cameraId?: string;
   zoomRatio?: number;
@@ -19,6 +28,46 @@ export type BalancedPrototypePreviewProps = ViewProps & {
   ) => void;
 };
 
+export type SourceFrameMetrics = {
+  status: 'measured' | 'unavailable';
+  method?: string;
+  sourceDimensions?: { width: number; height: number };
+  analysisDimensions?: { width: number; height: number };
+  inSampleSize?: number;
+  pixelsAnalyzed?: number;
+  nearBlack?: {
+    thresholdLumaInclusive: number;
+    pixelCount: number;
+    percentage: number;
+  };
+  nearWhite?: {
+    thresholdLumaInclusive: number;
+    pixelCount: number;
+    percentage: number;
+  };
+  luminancePercentiles?: {
+    p01: number;
+    p05: number;
+    p50: number;
+    p95: number;
+    p99: number;
+  };
+  luminanceHistogram16?: Array<{
+    lowerInclusive: number;
+    upperInclusive: number;
+    pixelCount: number;
+    percentage: number;
+  }>;
+  detailProxy?: {
+    name: string;
+    value: number | null;
+    comparisonCount: number;
+    note: string;
+  };
+  sourceModified: false;
+  failure: string | null;
+};
+
 export type PrototypeFrame = {
   requestIndex: number;
   label: string;
@@ -27,6 +76,7 @@ export type PrototypeFrame = {
   width: number | null;
   height: number | null;
   byteSize: number | null;
+  sourceFrameMetrics: SourceFrameMetrics | null;
   imageAssociation: 'sensor-timestamp' | 'delivery-order-fallback' | null;
   jpegOrientationDegrees: number | null;
   requested: Record<string, unknown>;
@@ -71,7 +121,7 @@ export type CaptureStrategyResult = {
 
 export type BalancedPrototypeComparison = {
   schemaVersion: number;
-  kind: 'android-balanced-capture-prototype';
+  kind: 'android-balanced-bracket-policy-experiment';
   status: 'completed' | 'partial' | 'failed';
   capturedAtUtc: string;
   android: {
@@ -91,8 +141,23 @@ export type BalancedPrototypeComparison = {
     timestampSource: string;
   };
   focusWhiteBalance: Record<string, unknown>;
-  aeSequence: CaptureStrategyResult;
-  manualBurst: CaptureStrategyResult;
+  aeBaseline: CaptureStrategyResult;
+  manualExperiment: {
+    candidate: {
+      id: ManualBracketCandidateId;
+      label: string;
+      evOffsets: number[];
+      temporaryExperimentOnly: true;
+    };
+    planner: {
+      id: TemporaryExposurePlannerId;
+      label: string;
+      positiveEvShutterCeilingNs: number | null;
+      positiveEvShutterCeilingDescription: string;
+      temporaryExperimentOnly: true;
+    };
+    capture: CaptureStrategyResult;
+  };
   movementWindows: Record<string, unknown>;
   storage: {
     directory: string;

@@ -20,12 +20,54 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import BalancedPrototypeModule, {
   BalancedPrototypePreview,
   type BalancedPrototypeComparison,
+  type ManualBracketCandidateId,
   type PrototypeFrame,
   type PrototypeStatus,
+  type SourceFrameMetrics,
+  type TemporaryExposurePlannerId,
 } from '../../modules/PicchuSpotBalancedPrototype';
 
 const UNAVAILABLE_MESSAGE =
   'This diagnostic harness is available only in Android development builds.';
+
+const BRACKET_CANDIDATES: {
+  id: ManualBracketCandidateId;
+  title: string;
+  detail: string;
+}[] = [
+  {
+    id: 'candidate-a-three-frame',
+    title: 'Candidate A · 3 frames',
+    detail: '-2 / 0 / +2 EV',
+  },
+  {
+    id: 'candidate-b-five-frame',
+    title: 'Candidate B · 5 frames',
+    detail: '-2 / -1 / 0 / +1 / +2 EV',
+  },
+];
+
+const EXPOSURE_PLANNERS: {
+  id: TemporaryExposurePlannerId;
+  title: string;
+  detail: string;
+}[] = [
+  {
+    id: 'manual-range',
+    title: 'Planner 1 · manual range',
+    detail: 'Baseline ISO where possible; sensor-range clamp only.',
+  },
+  {
+    id: 'positive-ev-cap-1-30',
+    title: 'Planner 2 · ~1/30 s cap',
+    detail: 'Positive EV cap with ISO redistribution.',
+  },
+  {
+    id: 'positive-ev-cap-1-15',
+    title: 'Planner 3 · ~1/15 s cap',
+    detail: 'Positive EV cap with ISO redistribution.',
+  },
+];
 
 export default function BalancedCapturePrototypeScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -41,6 +83,10 @@ export default function BalancedCapturePrototypeScreen() {
   const [selectedFrame, setSelectedFrame] = useState<PrototypeFrame | null>(
     null,
   );
+  const [selectedCandidateId, setSelectedCandidateId] =
+    useState<ManualBracketCandidateId>('candidate-a-three-frame');
+  const [selectedPlannerId, setSelectedPlannerId] =
+    useState<TemporaryExposurePlannerId>('manual-range');
 
   const refreshStatus = useCallback(async () => {
     if (!__DEV__ || Platform.OS !== 'android') {
@@ -62,7 +108,7 @@ export default function BalancedCapturePrototypeScreen() {
     }
   }, []);
 
-  const handleCaptureComparison = async () => {
+  const handleCaptureExperiment = async () => {
     if (!BalancedPrototypeModule) {
       setError('The development-only native module is unavailable.');
       return;
@@ -71,7 +117,10 @@ export default function BalancedCapturePrototypeScreen() {
     setIsCapturing(true);
 
     try {
-      const result = await BalancedPrototypeModule.runComparisonAsync();
+      const result = await BalancedPrototypeModule.runExperimentAsync(
+        selectedCandidateId,
+        selectedPlannerId,
+      );
       setComparison(result);
       setPreviewStatus('preview-ready');
       if (result.failure) {
@@ -82,7 +131,7 @@ export default function BalancedCapturePrototypeScreen() {
       setError(
         captureError instanceof Error
           ? captureError.message
-          : 'The Camera2 comparison could not complete.',
+          : 'The selected Camera2 experiment could not complete.',
       );
     } finally {
       setIsCapturing(false);
@@ -176,9 +225,9 @@ export default function BalancedCapturePrototypeScreen() {
           </View>
 
           <Text style={styles.intro}>
-            Camera2 owns this preview and writes temporary, app-private JPEGs
-            only. It does not enter a Shoot, Gallery, upload queue, or normal
-            Quick Camera flow.
+            Camera2 writes temporary, app-private source JPEGs only. Select one
+            temporary manual candidate and planner for each measured run; this
+            never enters a Shoot, Gallery, upload queue, or Quick Camera flow.
           </Text>
 
           <View
@@ -212,11 +261,91 @@ export default function BalancedCapturePrototypeScreen() {
 
           {!!error && <Text style={styles.error}>{error}</Text>}
 
+          <View style={styles.selectionSection}>
+            <Text style={styles.selectionLabel}>TEMPORARY BRACKET CANDIDATE</Text>
+            <View style={styles.selectionOptions}>
+              {BRACKET_CANDIDATES.map((candidate) => {
+                const selected = candidate.id === selectedCandidateId;
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    key={candidate.id}
+                    disabled={isCapturing}
+                    onPress={() => setSelectedCandidateId(candidate.id)}
+                    style={({ pressed }) => [
+                      styles.selectionOption,
+                      selected && styles.selectionOptionSelected,
+                      isCapturing && styles.disabledSecondaryButton,
+                      pressed && !isCapturing && styles.pressed,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.selectionOptionTitle,
+                        selected && styles.selectionOptionTitleSelected,
+                      ]}
+                    >
+                      {candidate.title}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.selectionOptionDetail,
+                        selected && styles.selectionOptionDetailSelected,
+                      ]}
+                    >
+                      {candidate.detail}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={styles.selectionSection}>
+            <Text style={styles.selectionLabel}>TEMPORARY EXPOSURE PLANNER</Text>
+            <View style={styles.selectionOptions}>
+              {EXPOSURE_PLANNERS.map((planner) => {
+                const selected = planner.id === selectedPlannerId;
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    key={planner.id}
+                    disabled={isCapturing}
+                    onPress={() => setSelectedPlannerId(planner.id)}
+                    style={({ pressed }) => [
+                      styles.selectionOption,
+                      selected && styles.selectionOptionSelected,
+                      isCapturing && styles.disabledSecondaryButton,
+                      pressed && !isCapturing && styles.pressed,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.selectionOptionTitle,
+                        selected && styles.selectionOptionTitleSelected,
+                      ]}
+                    >
+                      {planner.title}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.selectionOptionDetail,
+                        selected && styles.selectionOptionDetailSelected,
+                      ]}
+                    >
+                      {planner.detail}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
           <View style={styles.actions}>
             <Pressable
               accessibilityRole="button"
               disabled={isCapturing || previewStatus !== 'preview-ready'}
-              onPress={() => void handleCaptureComparison()}
+              onPress={() => void handleCaptureExperiment()}
               style={({ pressed }) => [
                 styles.primaryButton,
                 (isCapturing || previewStatus !== 'preview-ready') &&
@@ -227,8 +356,8 @@ export default function BalancedCapturePrototypeScreen() {
               {isCapturing && <ActivityIndicator color="#FFFFFF" size="small" />}
               <Text style={styles.primaryButtonText}>
                 {isCapturing
-                  ? 'Capturing Camera2 sets…'
-                  : 'Capture AE + Manual Comparison'}
+                  ? 'Capturing Camera2 experiment…'
+                  : 'Capture Selected Manual Set'}
               </Text>
             </Pressable>
             <Pressable
@@ -248,9 +377,10 @@ export default function BalancedCapturePrototypeScreen() {
           </View>
 
           <Text style={styles.note}>
-            One comparison captures a diagnostic -2 / 0 / +2 EV AE sequence,
-            then one real three-request Camera2 captureBurst(). These are not
-            final Balanced product settings.
+            Each run first captures a one-frame 0 EV AE control for the current
+            manual baseline, then one real full-resolution Camera2
+            captureBurst(). The bracket values and shutter caps are experiment
+            inputs, not production settings.
           </Text>
 
           {comparison && (
@@ -339,7 +469,10 @@ function ComparisonResults({
   comparison: BalancedPrototypeComparison;
   onSelectFrame: (frame: PrototypeFrame) => void;
 }) {
-  const strategies = [comparison.aeSequence, comparison.manualBurst];
+  const strategies = [
+    comparison.aeBaseline,
+    comparison.manualExperiment.capture,
+  ];
 
   return (
     <View style={styles.results}>
@@ -352,6 +485,10 @@ function ComparisonResults({
         Device {comparison.android.manufacturer} {comparison.android.model} ·
         Camera {comparison.camera.logicalCameraId} · {comparison.camera.timestampSource}
         {' '}timestamps
+      </Text>
+      <Text style={styles.resultsBody}>
+        {comparison.manualExperiment.candidate.label} ·{' '}
+        {comparison.manualExperiment.planner.label}
       </Text>
 
       {strategies.map((strategy) => (
@@ -406,6 +543,9 @@ function ComparisonResults({
                 <Text style={styles.frameMeta}>
                   physical {frame.actual.activePhysicalCameraId ?? 'not exposed'}
                 </Text>
+                <Text style={styles.frameMeta}>
+                  {formatSourceMetrics(frame.sourceFrameMetrics)}
+                </Text>
                 {!!frame.imageAssociation && (
                   <Text style={styles.frameMeta}>
                     JPEG linked by {frame.imageAssociation.replaceAll('-', ' ')}
@@ -439,7 +579,7 @@ function MovementEvidence({
   movementWindows: Record<string, unknown>;
 }) {
   const windows = [
-    ['AE sequence', asRecord(movementWindows.aeSequence)],
+    ['AE baseline', asRecord(movementWindows.aeBaseline)],
     ['Manual burst', asRecord(movementWindows.manualBurst)],
   ] as const;
 
@@ -485,12 +625,25 @@ function formatNumber(value: number | null | undefined) {
 
 function formatExposure(requested: Record<string, unknown>) {
   if (typeof requested.sensorExposureTimeNs === 'number') {
-    return `${requested.sensorExposureTimeNs.toLocaleString('en-US')} ns · ISO ${formatNumber(
+    const requestedEv = requested.requestedEv;
+    const evPrefix = typeof requestedEv === 'number' ? `${requestedEv > 0 ? '+' : ''}${requestedEv} EV · ` : '';
+    return `${evPrefix}${requested.sensorExposureTimeNs.toLocaleString('en-US')} ns · ISO ${formatNumber(
       requested.sensorSensitivityIso as number | undefined,
     )}`;
   }
 
   return `${formatNumber(requested.aeRequestedEv as number | undefined)} EV`;
+}
+
+function formatSourceMetrics(metrics: SourceFrameMetrics | null) {
+  if (!metrics || metrics.status !== 'measured') {
+    return `source metrics unavailable${metrics?.failure ? `: ${metrics.failure}` : ''}`;
+  }
+  const percentiles = metrics.luminancePercentiles;
+  const detail = metrics.detailProxy?.value;
+  return `metrics: black ${formatNumber(metrics.nearBlack?.percentage)}% · white ${formatNumber(
+    metrics.nearWhite?.percentage,
+  )}% · p05/p95 ${formatNumber(percentiles?.p05)}/${formatNumber(percentiles?.p95)} · detail ${formatNumber(detail)}`;
 }
 
 const styles = StyleSheet.create({
@@ -594,6 +747,48 @@ const styles = StyleSheet.create({
     color: '#B9C5CD',
     fontSize: 12,
     lineHeight: 17,
+  },
+  selectionSection: {
+    marginTop: 20,
+  },
+  selectionLabel: {
+    color: '#C7A94E',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+  },
+  selectionOptions: {
+    marginTop: 9,
+    gap: 8,
+  },
+  selectionOption: {
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#3E5060',
+    borderRadius: 12,
+    backgroundColor: '#102A3B',
+  },
+  selectionOptionSelected: {
+    borderColor: '#C7A94E',
+    backgroundColor: '#253743',
+  },
+  selectionOptionTitle: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  selectionOptionTitleSelected: {
+    color: '#F4EFE8',
+  },
+  selectionOptionDetail: {
+    marginTop: 3,
+    color: '#B1BEC6',
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  selectionOptionDetailSelected: {
+    color: '#D8E2E8',
   },
   actions: {
     marginTop: 16,
