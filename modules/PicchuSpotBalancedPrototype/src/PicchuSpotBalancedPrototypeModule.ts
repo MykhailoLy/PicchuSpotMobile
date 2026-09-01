@@ -1,7 +1,10 @@
 import { NativeModule, requireOptionalNativeModule } from 'expo';
 
 import type {
+  BalancedCompatibilityInventory,
+  BalancedCompatibilityProbeReport,
   BalancedPrototypeComparison,
+  LocalCompatibilityProbeEvidence,
   ManualBracketCandidateId,
   PrototypeStatus,
   TemporaryExposurePlannerId,
@@ -17,6 +20,14 @@ declare class PicchuSpotBalancedPrototypeModule extends NativeModule<{}> {
     candidateId: ManualBracketCandidateId,
     plannerId: TemporaryExposurePlannerId,
   ): Promise<BalancedPrototypeComparison>;
+  inspectCompatibilityAsync(): Promise<BalancedCompatibilityInventory>;
+  runCompatibilityProbeAsync(): Promise<BalancedCompatibilityProbeReport>;
+  readLatestCompatibilityProbeAsync(): Promise<LocalCompatibilityProbeEvidence>;
+  clearCompatibilityProbeFilesAsync(): Promise<{
+    status: 'cleared' | 'failed' | 'unavailable-in-release';
+    removedFileCount: number;
+    failure: string | null;
+  }>;
   clearPrototypeFilesAsync(): Promise<{
     status: 'cleared' | 'failed' | 'unavailable-in-release';
     removedFileCount: number;

@@ -106,6 +106,10 @@ class BalancedCapturePreview(context: Context, appContext: AppContext) : ExpoVie
   fun runExperiment(candidateId: String, plannerId: String): Map<String, Any?> =
     controller.runExperiment(candidateId, plannerId)
 
+  fun inspectCompatibility(): Map<String, Any?> = controller.inspectCompatibility()
+
+  fun runCompatibilityProbe(): Map<String, Any?> = controller.runCompatibilityProbe()
+
   private fun emitStatus(status: String, message: String?) {
     val payload = mutableMapOf<String, Any>("status" to status)
     if (message != null) {
@@ -159,6 +163,7 @@ private class BalancedPrototypeCamera(
   private var controls = PreviewControls()
   @Volatile
   private var activeCollector: FrameCollector? = null
+  private var activeEvidenceDirectoryName = PROTOTYPE_DIRECTORY
 
   init {
     textureView.surfaceTextureListener = this
@@ -213,6 +218,58 @@ private class BalancedPrototypeCamera(
     candidateId = BRACKET_CANDIDATE_A.id,
     plannerId = EXPOSURE_PLANNER_MANUAL_RANGE.id,
   )
+
+  fun inspectCompatibility(): Map<String, Any?> =
+    collectCompatibilityInventory(context, cameraId).report
+
+  fun runCompatibilityProbe(): Map<String, Any?> {
+    synchronized(captureMonitor) {
+      val inventory = collectCompatibilityInventory(context, cameraId)
+      val filename = "compatibility-" + SystemClock.elapsedRealtimeNanos() + ".json"
+      var candidateExperiment: Map<String, Any?>? = null
+      val runtime = when {
+        inventory.selectedCameraId == null -> runtimeNotRun(
+          "No rear Camera2 camera was available for the runtime probe.",
+        )
+        inventory.selectedCameraId != cameraId -> runtimeNotRun(
+          "Remount the preview with selected rear camera " + inventory.selectedCameraId + " before running the probe.",
+        )
+        !inventory.staticPassed -> runtimeNotRun(
+          "Required static candidate capabilities did not pass; runtime capture was not attempted.",
+        )
+        else -> {
+          val previousDirectory = activeEvidenceDirectoryName
+          activeEvidenceDirectoryName = COMPATIBILITY_PROBE_DIRECTORY
+          try {
+            val experiment = runExperiment(
+              candidateId = BRACKET_CANDIDATE_A.id,
+              plannerId = EXPOSURE_PLANNER_CAP_1_30.id,
+            )
+            candidateExperiment = experiment
+            evaluateRuntimeCompatibility(experiment)
+          } finally {
+            activeEvidenceDirectoryName = previousDirectory
+          }
+        }
+      }
+      val report = inventory.report + mapOf(
+        "kind" to "android-balanced-compatibility-probe",
+        "candidateExperiment" to candidateExperiment,
+        "runtimeValidation" to runtime.report,
+        "classification" to classifyCompatibility(inventory, runtime),
+        "storage" to mapOf(
+          "directory" to COMPATIBILITY_PROBE_DIRECTORY,
+          "evidenceFilename" to filename,
+          "filesAreCacheOnly" to true,
+          "galleryWrite" to false,
+          "shootSqliteWrite" to false,
+          "upload" to false,
+        ),
+      )
+      persistCompatibilityReport(context, report, filename)
+      return report
+    }
+  }
 
   fun runExperiment(candidateId: String, plannerId: String): Map<String, Any?> {
     synchronized(captureMonitor) {
@@ -883,7 +940,7 @@ private class BalancedPrototypeCamera(
         null
       } ?: return
       try {
-        activeCollector?.onImage(image, prototypeDirectory())
+        activeCollector?.onImage(image, evidenceDirectory())
       } finally {
         image.close()
       }
@@ -1017,7 +1074,7 @@ private class BalancedPrototypeCamera(
       ),
       "movementWindows" to movementWindows,
       "storage" to mapOf(
-        "directory" to PROTOTYPE_DIRECTORY,
+        "directory" to activeEvidenceDirectoryName,
         "evidenceFilename" to evidenceFilename,
         "filesAreCacheOnly" to true,
         "galleryWrite" to false,
@@ -1050,9 +1107,9 @@ private class BalancedPrototypeCamera(
   private fun hasCameraPermission(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
     context.checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
-  private fun prototypeDirectory(): File {
+  private fun evidenceDirectory(): File {
     val cacheDirectory = context.cacheDir ?: throw IllegalStateException("App cache directory is unavailable.")
-    val directory = File(cacheDirectory, PROTOTYPE_DIRECTORY)
+    val directory = File(cacheDirectory, activeEvidenceDirectoryName)
     if (!directory.exists() && !directory.mkdirs()) {
       throw IllegalStateException("Could not create the prototype cache directory.")
     }
@@ -1061,7 +1118,7 @@ private class BalancedPrototypeCamera(
 
   private fun persistComparisonEvidence(result: Map<String, Any?>, filename: String) {
     try {
-      val target = File(prototypeDirectory(), filename)
+      val target = File(evidenceDirectory(), filename)
       FileOutputStream(target).use { output ->
         output.write(JSONObject(result).toString(2).toByteArray(Charsets.UTF_8))
       }
