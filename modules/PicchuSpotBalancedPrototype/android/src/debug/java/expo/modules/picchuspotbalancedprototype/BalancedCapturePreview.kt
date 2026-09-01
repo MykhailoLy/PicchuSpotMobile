@@ -48,7 +48,6 @@ import kotlin.math.max
 import kotlin.math.roundToLong
 import kotlin.math.sqrt
 import kotlin.math.roundToInt
-import kotlin.math.sqrt
 
 /**
  * A real Camera2-owned preview and a deliberately development-only comparison

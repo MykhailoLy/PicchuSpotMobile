@@ -36,32 +36,34 @@ The device capability capture reported `MANUAL_SENSOR=yes`, `BURST_CAPTURE=yes`,
 
 ## Per-set timing, movement, and payload evidence
 
-All rows include the actual AE baseline (shutter/ISO), total duration, actual sensor and callback offsets, movement window, completion outcome, and total JPEG payload. Per-frame actual shutter/ISO, byte count, clipping, percentiles, and detail are in the following section.
+`AE baseline total` is the duration of the one-frame AE-baseline strategy, from entering its temporary stability wait through its JPEG completion. It is **not** the manual burst duration and it is **not** full experiment duration. `Manual captureBurst` is the separately recorded `manualExperiment.capture.totalDurationMs` interval, from immediately before the manual Camera2 burst submission until all burst JPEG results completed; source-metric decoding occurs after that interval. The full experiment duration was not persisted as a separate field and is therefore not inferred here.
 
-| Scene / handling | Candidate / planner | AE baseline | Total | S offsets | C offsets | g / accel | JPEG payload | Result |
-| --- | --- | --- | ---: | --- | --- | --- | ---: | --- |
-| HDR / stabilized | A P1 | 20.0 ms / 58 | 816.1 ms | 45.2, 180.1 | 22.6, 148.0 | .0006 / .0010 | 19.08 MB | complete |
-| HDR / stabilized | A P2 | 20.0 / 68 | 624.2 | 45.2, 86.9 | 32.5, 22.9 | .0020 / .0029 | 20.36 MB | complete |
-| HDR / stabilized | A P3 | 20.0 / 72 | 599.9 | 45.2, 153.6 | 40.1, 89.1 | .0006 / .0012 | 19.70 MB | complete |
-| HDR / stabilized | B P2 | 20.0 / 72 | 630.8 | 45.0, 50.2, 86.9, 100.3 | 46.4, 34.1, 27.1, 81.7 | .0005 / .0009 | 34.05 MB | complete |
-| HDR / stabilized | B P3 | 20.0 / 74 | 591.4 | 45.0, 50.2, 100.2, 173.6 | 53.4, 20.8, 24.5, 187.7 | .0006 / .0011 | 33.54 MB | complete |
-| HDR / handheld | A P2 | 20.0 / 34 | 843.5 | 45.2, 86.9 | 28.2, 19.1 | .0200 / .0404 | 19.30 MB | complete |
-| HDR / handheld | B P2 | 20.0 / 36 | 610.6 | 45.0, 70.3, 86.9, 100.3 | 37.0, 44.8, 53.8, 18.7 | .0034 / .0053 | 31.84 MB | complete |
-| Even / stabilized | A P1 | 20.0 / 39 | 599.3 | 45.2, 180.1 | 33.6, 156.0 | .0011 / .0018 | 18.31 MB | complete |
-| Even / stabilized | B P1 | 20.0 / 44 | 599.7 | 45.0, 70.3, 100.2, 200.1 | 21.8, 33.9, 38.0, 319.7 | .0010 / .0018 | 30.47 MB | complete |
-| Even / stabilized | B P2 | 20.0 / 41 | 610.8 | 45.0, 50.2, 86.9, 100.3 | 31.7, 51.0, 20.5, 66.5 | .0013 / .0021 | 32.32 MB | complete |
-| Even / handheld | A P2 | 20.0 / 42 | 593.5 | 45.2, 86.9 | 37.9, 21.4 | .0129 / .0251 | 20.03 MB | complete |
-| Even / handheld | B P2 | 20.0 / 49 | 597.6 | 45.0, 50.2, 86.9, 100.3 | 19.7, 30.4, 24.9, 123.2 | .0009 / .0017 | 31.49 MB | complete |
-| Dim / stabilized | A P1 | 20.0 / 52 | 624.0 | 45.2, 180.1 | 28.5, 205.2 | .0009 / .0016 | 18.27 MB | complete |
-| Dim / stabilized (repeat) | A P2 | 20.0 / 55 | 596.3 | 45.2, 86.9 | 21.8, 24.1 | .0007 / .0010 | 19.29 MB | complete |
-| Dim / stabilized (repeat) | A P3 | 20.0 / 53 | 591.7 | 45.2, 153.6 | 16.7, 141.8 | .0006 / .0010 | 18.41 MB | complete |
-| Dim / stabilized | A P2 | 20.0 / 55 | 599.1 | 45.2, 86.9 | 28.3, 23.4 | .0005 / .0011 | 19.49 MB | complete |
-| Dim / stabilized | A P3 | 20.0 / 56 | 567.3 | 45.2, 153.6 | 18.1, 181.1 | .0007 / .0011 | 18.57 MB | complete |
-| Dim / stabilized | B P1 | 20.0 / 57 | 571.9 | 45.0, 50.2, 100.2, 200.1 | 19.9, 26.3, 40.9, 310.8 | .0006 / .0009 | 30.98 MB | complete |
-| Dim / stabilized | B P2 | 20.0 / 58 | 583.5 | 45.0, 50.2, 86.9, 100.3 | 22.4, 28.3, 19.7, 134.5 | .0005 / .0009 | 31.95 MB | complete |
-| Dim / stabilized | B P3 | 20.0 / 60 | 574.5 | 45.0, 50.2, 100.2, 173.6 | 27.8, 20.9, 47.8, 276.0 | .0005 / .0011 | 31.70 MB | complete |
-| Dim / handheld | A P2 | 20.0 / 53 | 586.6 | 45.2, 86.9 | 19.0, 32.6 | .0190 / .0373 | 19.13 MB | complete |
-| Dim / handheld | B P2 | 20.0 / 54 | 599.4 | 45.0, 50.2, 86.9, 100.3 | 24.8, 25.3, 16.9, 127.6 | .0034 / .0044 | 30.89 MB | complete |
+All rows include the actual AE baseline (shutter/ISO), the two separately preserved durations, actual sensor and callback offsets, movement window, completion outcome, and total JPEG payload. Per-frame actual shutter/ISO, byte count, clipping, percentiles, and detail are in the following section.
+
+| Scene / handling | Candidate / planner | AE baseline | AE baseline total | Manual captureBurst | S offsets | C offsets | g / accel | JPEG payload | Result |
+| --- | --- | --- | ---: | ---: | --- | --- | --- | ---: | --- |
+| HDR / stabilized | A P1 | 20.0 ms / 58 | 816.1 ms | 610.8 ms | 45.2, 180.1 | 22.6, 148.0 | .0006 / .0010 | 19.08 MB | complete |
+| HDR / stabilized | A P2 | 20.0 / 68 | 624.2 | 506.1 | 45.2, 86.9 | 32.5, 22.9 | .0020 / .0029 | 20.36 MB | complete |
+| HDR / stabilized | A P3 | 20.0 / 72 | 599.9 | 570.5 | 45.2, 153.6 | 40.1, 89.1 | .0006 / .0012 | 19.70 MB | complete |
+| HDR / stabilized | B P2 | 20.0 / 72 | 630.8 | 648.1 | 45.0, 50.2, 86.9, 100.3 | 46.4, 34.1, 27.1, 81.7 | .0005 / .0009 | 34.05 MB | complete |
+| HDR / stabilized | B P3 | 20.0 / 74 | 591.4 | 736.2 | 45.0, 50.2, 100.2, 173.6 | 53.4, 20.8, 24.5, 187.7 | .0006 / .0011 | 33.54 MB | complete |
+| HDR / handheld | A P2 | 20.0 / 34 | 843.5 | 521.1 | 45.2, 86.9 | 28.2, 19.1 | .0200 / .0404 | 19.30 MB | complete |
+| HDR / handheld | B P2 | 20.0 / 36 | 610.6 | 642.6 | 45.0, 70.3, 86.9, 100.3 | 37.0, 44.8, 53.8, 18.7 | .0034 / .0053 | 31.84 MB | complete |
+| Even / stabilized | A P1 | 20.0 / 39 | 599.3 | 647.5 | 45.2, 180.1 | 33.6, 156.0 | .0011 / .0018 | 18.31 MB | complete |
+| Even / stabilized | B P1 | 20.0 / 44 | 599.7 | 879.8 | 45.0, 70.3, 100.2, 200.1 | 21.8, 33.9, 38.0, 319.7 | .0010 / .0018 | 30.47 MB | complete |
+| Even / stabilized | B P2 | 20.0 / 41 | 610.8 | 614.5 | 45.0, 50.2, 86.9, 100.3 | 31.7, 51.0, 20.5, 66.5 | .0013 / .0021 | 32.32 MB | complete |
+| Even / handheld | A P2 | 20.0 / 42 | 593.5 | 514.8 | 45.2, 86.9 | 37.9, 21.4 | .0129 / .0251 | 20.03 MB | complete |
+| Even / handheld | B P2 | 20.0 / 49 | 597.6 | 647.4 | 45.0, 50.2, 86.9, 100.3 | 19.7, 30.4, 24.9, 123.2 | .0009 / .0017 | 31.49 MB | complete |
+| Dim / stabilized | A P1 | 20.0 / 52 | 624.0 | 675.3 | 45.2, 180.1 | 28.5, 205.2 | .0009 / .0016 | 18.27 MB | complete |
+| Dim / stabilized (repeat) | A P2 | 20.0 / 55 | 596.3 | 466.8 | 45.2, 86.9 | 21.8, 24.1 | .0007 / .0010 | 19.29 MB | complete |
+| Dim / stabilized (repeat) | A P3 | 20.0 / 53 | 591.7 | 604.2 | 45.2, 153.6 | 16.7, 141.8 | .0006 / .0010 | 18.41 MB | complete |
+| Dim / stabilized | A P2 | 20.0 / 55 | 599.1 | 522.5 | 45.2, 86.9 | 28.3, 23.4 | .0005 / .0011 | 19.49 MB | complete |
+| Dim / stabilized | A P3 | 20.0 / 56 | 567.3 | 610.9 | 45.2, 153.6 | 18.1, 181.1 | .0007 / .0011 | 18.57 MB | complete |
+| Dim / stabilized | B P1 | 20.0 / 57 | 571.9 | 820.8 | 45.0, 50.2, 100.2, 200.1 | 19.9, 26.3, 40.9, 310.8 | .0006 / .0009 | 30.98 MB | complete |
+| Dim / stabilized | B P2 | 20.0 / 58 | 583.5 | 621.2 | 45.0, 50.2, 86.9, 100.3 | 22.4, 28.3, 19.7, 134.5 | .0005 / .0009 | 31.95 MB | complete |
+| Dim / stabilized | B P3 | 20.0 / 60 | 574.5 | 802.9 | 45.0, 50.2, 100.2, 173.6 | 27.8, 20.9, 47.8, 276.0 | .0005 / .0011 | 31.70 MB | complete |
+| Dim / handheld | A P2 | 20.0 / 53 | 586.6 | 492.9 | 45.2, 86.9 | 19.0, 32.6 | .0190 / .0373 | 19.13 MB | complete |
+| Dim / handheld | B P2 | 20.0 / 54 | 599.4 | 654.9 | 45.0, 50.2, 86.9, 100.3 | 24.8, 25.3, 16.9, 127.6 | .0034 / .0044 | 30.89 MB | complete |
 
 ## Actual source-frame evidence
 
@@ -105,7 +107,7 @@ The source metrics do not demonstrate merged-image quality or noise performance,
 | Decision | Measured evidence | Engineering inference | Recommendation |
 | --- | --- | --- | --- |
 | Capture mechanism | 22/22 manual `captureBurst` sets completed with actual shutter/ISO, sensor, and JPEG completion evidence. | Camera2 manual bursts are viable as a basis for the next **development** prototype on this S25 Ultra. Cross-device behavior remains unproven. | Use manual Camera2 `captureBurst` for the next prototype. |
-| Frame count | A P2 handheld bursts were 492.9-521.1 ms and about 19-20 MB; B P2 were 642.6-654.9 ms and about 31-32 MB. Both include the same -2/+2 endpoints. | The two B intermediates add coverage, but this experiment did not show a downstream merge benefit sufficient to pay the approximately 130 ms and roughly 12 MB extra cost. | Candidate A: 3 frames. |
+| Frame count | The `Manual captureBurst` cells for handheld HDR / even / dim are A P2: 521.1 / 514.8 / 492.9 ms (range 492.9-521.1 ms, about 19-20 MB) and B P2: 642.6 / 647.4 / 654.9 ms (range 642.6-654.9 ms, about 31-32 MB). Both include the same -2/+2 endpoints. | The two B intermediates add coverage, but this experiment did not show a downstream merge benefit sufficient to pay the approximately 130 ms and roughly 12 MB extra cost. | Candidate A: 3 frames. |
 | EV spacing | A -2/0/+2 endpoints completed across HDR, even, and dim scenes. | Two-stop endpoint separation is the strongest next candidate; it preserves the tested tonal spread with fewer frames. | -2 / 0 / +2 EV. |
 | Positive-EV shutter | P1 +2 was 79.931 ms; P2 was 33.333 ms with ISO redistribution and comparable endpoint clipping metrics; P3 was 66.667 ms and has less handheld-duration benefit. | A temporary ceiling is justified for the next handheld experiment, but it is not a final product policy. | Experiment with about 1/30 s for positive EV and redistribute ISO. |
 | Tonal coverage under cap | Cap-affected product error was within approximately 0.01 EV; capped +2 near-white was 11.03-12.63%, with 0% near-black. | The planner preserved enough sampled source exposure coverage to continue testing; it does not validate noise, dynamic range, or a merge result. | Retain cap + ISO redistribution in the next prototype only. |
