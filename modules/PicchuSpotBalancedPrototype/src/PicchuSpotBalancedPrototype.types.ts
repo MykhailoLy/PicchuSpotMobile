@@ -190,7 +190,7 @@ export type BalancedCompatibilityInventory = {
   candidate?: Record<string, unknown>;
   cameraTopology?: {
     rearCameraIds: string[];
-    selectedRearLogicalCameraId: string | null;
+    selectedRearCameraId: string | null;
     selectedBy: string;
     cameras: Array<Record<string, unknown>>;
   };

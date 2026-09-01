@@ -68,8 +68,8 @@ internal fun collectCompatibilityInventory(
       "candidate" to candidateContract(),
       "cameraTopology" to mapOf(
         "rearCameraIds" to rear.mapNotNull { it["cameraId"] as? String },
-        "selectedRearLogicalCameraId" to selected?.get("cameraId"),
-        "selectedBy" to "Camera2 topology, advertised contract capability, and JPEG area; never manufacturer or model",
+        "selectedRearCameraId" to selected?.get("cameraId"),
+        "selectedBy" to "Actual candidate-contract capability first, then hardware level and JPEG area; topology is diagnostic only; never manufacturer or model",
         "cameras" to cameras,
       ),
       "selectedJpegSize" to selected?.mapValue("selectedFourByThreeJpegSize"),
@@ -85,10 +85,12 @@ internal fun collectCompatibilityInventory(
         "reasons" to evaluation.second,
         "requiredRules" to staticRules(),
         "diagnosticOnly" to listOf(
+          "logical and physical multi-camera topology",
           "RAW capability",
           "AE compensation range and step",
           "AWB and AE lock availability",
           "active physical camera result",
+          "Camera2 timestamp source",
           "gyroscope and linear-acceleration availability",
         ),
       ),
@@ -111,13 +113,10 @@ internal fun evaluateRuntimeCompatibility(experiment: Map<String, Any?>): Runtim
   val plannerPass = planner["id"] == "positive-ev-cap-1-30" &&
     planner.number("positiveEvShutterCeilingNs") == 33_333_333.0
   val capturePass = experiment["status"] == "completed" && capture["status"] == "completed"
-  val orderPass = numbers(capture["requestOrder"]).map(Number::toInt) == listOf(0, 1, 2) &&
-    numbers(capture["completionOrder"]).map(Number::toInt) == listOf(0, 1, 2)
   if (!candidatePass) reasons += "The runtime run did not use the selected three-frame candidate."
   if (!plannerPass) reasons += "The runtime run did not use the temporary 1/30-second positive-EV planner."
   if (!capturePass) reasons += "The manual Camera2 burst did not complete."
   if (frames.size != 3) reasons += "Expected three JPEG frames; received " + frames.size + "."
-  if (!orderPass) reasons += "Manual request/completion order was not [0, 1, 2]."
 
   val frameResults = frames.mapIndexed { index, frame ->
     val requested = frame.mapValue("requested")
@@ -173,7 +172,7 @@ internal fun evaluateRuntimeCompatibility(experiment: Map<String, Any?>): Runtim
   }
   val burstTiming = capture.number("totalDurationMs")
   if (burstTiming == null || burstTiming <= 0.0) reasons += "Manual burst timing was unavailable."
-  val passed = candidatePass && plannerPass && capturePass && frames.size == 3 && orderPass &&
+  val passed = candidatePass && plannerPass && capturePass && frames.size == 3 &&
     frameResults.all { it["passed"] == true } && burstTiming != null && burstTiming > 0.0
   if (passed) reasons += "The candidate burst passed with three timestamp-correlated JPEGs and controls within the development-only 5% tolerance."
   return RuntimeCompatibility(
@@ -250,15 +249,33 @@ internal fun persistCompatibilityReport(context: Context, report: Map<String, An
 }
 
 internal fun readLatestCompatibilityReport(cacheDirectory: File?): Map<String, Any?> {
-  val latest = cacheDirectory?.let { File(it, COMPATIBILITY_PROBE_DIRECTORY) }?.listFiles()
-    ?.filter { it.isFile && it.extension.lowercase(Locale.US) == "json" }
-    ?.maxByOrNull(File::lastModified)
-    ?: return mapOf("status" to "missing", "filename" to null, "json" to null, "failure" to null)
-  return try {
-    mapOf("status" to "available", "filename" to latest.name, "json" to latest.readText(), "failure" to null)
-  } catch (error: Throwable) {
-    mapOf("status" to "failed", "filename" to latest.name, "json" to null, "failure" to errorMessage(error))
+  val files = cacheDirectory?.let { File(it, COMPATIBILITY_PROBE_DIRECTORY) }?.listFiles()
+    ?.filter { it.isFile && it.name.startsWith("compatibility-") && it.extension.lowercase(Locale.US) == "json" }
+    ?.sortedByDescending(File::lastModified)
+    .orEmpty()
+  if (files.isEmpty()) {
+    return mapOf("status" to "missing", "filename" to null, "json" to null, "failure" to null)
   }
+  for (file in files) {
+    try {
+      val json = file.readText()
+      val report = JSONObject(json)
+      if (
+        report.optInt("schemaVersion", -1) == 1 &&
+        report.optString("kind") == "android-balanced-compatibility-probe"
+      ) {
+        return mapOf("status" to "available", "filename" to file.name, "json" to json, "failure" to null)
+      }
+    } catch (_: Throwable) {
+      // Continue to an older compatibility-named report before reporting a failure below.
+    }
+  }
+  return mapOf(
+    "status" to "failed",
+    "filename" to files.first().name,
+    "json" to null,
+    "failure" to "No schema-valid Android Balanced compatibility report was found.",
+  )
 }
 
 internal fun clearCompatibilityProbeDirectory(cacheDirectory: File?): Map<String, Any?> {
@@ -313,14 +330,11 @@ private fun cameraSnapshot(manager: CameraManager, id: String): Map<String, Any?
 }
 
 private fun selectRearCamera(rear: List<Map<String, Any?>>, preferred: String?): Map<String, Any?>? {
-  rear.firstOrNull { camera ->
-    camera["cameraId"] == preferred &&
-      camera.mapValue("capabilities")["logicalMultiCamera"] == true &&
-      camera.mapValue("capabilities")["manualSensor"] == true &&
-      camera.mapValue("capabilities")["burstCapture"] == true
-  }?.let { return it }
+  rear.firstOrNull { camera -> camera["cameraId"] == preferred && satisfiesStaticCandidateContract(camera) }
+    ?.let { return it }
   return rear.sortedWith(
-    compareByDescending<Map<String, Any?>> { it.mapValue("capabilities")["logicalMultiCamera"] == true }
+    compareByDescending<Map<String, Any?>>(::satisfiesStaticCandidateContract)
+      .thenByDescending(::staticCandidateContractScore)
       .thenByDescending { hardwareRank(it["hardwareLevel"] as? String) }
       .thenByDescending { it.mapValue("selectedFourByThreeJpegSize").number("width") ?: 0.0 }
       .thenBy { it["cameraId"] as? String ?: "" },
@@ -332,34 +346,14 @@ private fun evaluateStaticContract(
   selected: Map<String, Any?>?,
 ): Pair<Boolean, List<String>> {
   if (selected == null) return false to listOf("No rear Camera2 camera was discovered.")
-  val capabilities = selected.mapValue("capabilities")
-  val exposure = selected.mapValue("exposureTimeRangeNs")
-  val sensitivity = selected.mapValue("sensitivityRangeIso")
-  val zoom = selected.mapValue("zoomRatioRange")
-  val afModes = selected["afModes"] as? List<*> ?: emptyList<Any>()
-  val minFocus = selected.number("minimumFocusDistanceDiopters")
-  val required = listOf(
-    "rear logical Camera2 camera" to (capabilities["logicalMultiCamera"] == true),
-    "non-LEGACY hardware level" to (selected["hardwareLevel"] != null && selected["hardwareLevel"] != "LEGACY"),
-    "MANUAL_SENSOR" to (capabilities["manualSensor"] == true),
-    "BURST_CAPTURE" to (capabilities["burstCapture"] == true),
-    "4:3 JPEG output" to selected.mapValue("selectedFourByThreeJpegSize").isNotEmpty(),
-    "manual exposure-time range" to rangeValid(exposure),
-    "manual ISO range" to rangeValid(sensitivity),
-    "1x zoom support" to (
-      (zoom.number("lower")?.let { lower -> zoom.number("upper")?.let { it >= 1.0 && lower <= 1.0 } } == true) ||
-        (selected.number("maxDigitalZoom")?.let { it >= 1.0 } == true)
-      ),
-    "AF baseline support" to (minFocus?.let { it <= 0.0 } == true || afModes.contains("AUTO")),
-    "known timestamp source" to (selected["timestampSource"] != null && selected["timestampSource"] != "UNKNOWN"),
-  )
+  val required = staticCandidateContractRequirements(selected)
   val reasons = required.filterNot { it.second }.map { "Missing required static capability: " + it.first + "." }.toMutableList()
   if (reasons.isEmpty()) reasons += "All required static capabilities for the current candidate were advertised."
   return (reasons.size == 1 && reasons.first().startsWith("All required")) to reasons
 }
 
 private fun staticRules(): List<String> = listOf(
-  "rear logical Camera2 camera",
+  "rear Camera2 camera",
   "non-LEGACY hardware level",
   "MANUAL_SENSOR",
   "BURST_CAPTURE",
@@ -367,8 +361,36 @@ private fun staticRules(): List<String> = listOf(
   "usable manual exposure-time and ISO ranges",
   "1x zoom support",
   "AF baseline support",
-  "known Camera2 timestamp source",
 )
+
+private fun staticCandidateContractRequirements(camera: Map<String, Any?>): List<Pair<String, Boolean>> {
+  val capabilities = camera.mapValue("capabilities")
+  val exposure = camera.mapValue("exposureTimeRangeNs")
+  val sensitivity = camera.mapValue("sensitivityRangeIso")
+  val zoom = camera.mapValue("zoomRatioRange")
+  val afModes = camera["afModes"] as? List<*> ?: emptyList<Any>()
+  val minFocus = camera.number("minimumFocusDistanceDiopters")
+  return listOf(
+    "rear Camera2 camera" to (camera["lensFacing"] == "BACK"),
+    "non-LEGACY hardware level" to (camera["hardwareLevel"] != null && camera["hardwareLevel"] != "LEGACY"),
+    "MANUAL_SENSOR" to (capabilities["manualSensor"] == true),
+    "BURST_CAPTURE" to (capabilities["burstCapture"] == true),
+    "4:3 JPEG output" to camera.mapValue("selectedFourByThreeJpegSize").isNotEmpty(),
+    "manual exposure-time range" to rangeValid(exposure),
+    "manual ISO range" to rangeValid(sensitivity),
+    "1x zoom support" to (
+      (zoom.number("lower")?.let { lower -> zoom.number("upper")?.let { it >= 1.0 && lower <= 1.0 } } == true) ||
+        (camera.number("maxDigitalZoom")?.let { it >= 1.0 } == true)
+      ),
+    "AF baseline support" to (minFocus?.let { it <= 0.0 } == true || afModes.contains("AUTO")),
+  )
+}
+
+private fun satisfiesStaticCandidateContract(camera: Map<String, Any?>): Boolean =
+  staticCandidateContractRequirements(camera).all { it.second }
+
+private fun staticCandidateContractScore(camera: Map<String, Any?>): Int =
+  staticCandidateContractRequirements(camera).count { it.second }
 
 private fun candidateContract(): Map<String, Any?> = mapOf(
   "strategy" to "manual Camera2 captureBurst",

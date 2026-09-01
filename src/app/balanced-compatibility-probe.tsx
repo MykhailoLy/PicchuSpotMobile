@@ -46,11 +46,11 @@ export default function BalancedCompatibilityProbeScreen() {
     try {
       const next = await BalancedPrototypeModule.inspectCompatibilityAsync();
       setInventory(next);
-      const selected = next.cameraTopology?.selectedRearLogicalCameraId;
+      const selected = next.cameraTopology?.selectedRearCameraId;
       if (selected && selected !== cameraId) {
         setCameraId(selected);
         setMessage(
-          'Selected the capability-ranked rear logical camera ' +
+          'Selected the capability-ranked rear camera ' +
             selected +
             '. Preview is restarting before runtime validation.',
         );
@@ -89,7 +89,7 @@ export default function BalancedCompatibilityProbeScreen() {
       const next = await BalancedPrototypeModule.runCompatibilityProbeAsync();
       setReport(next);
       setEvidenceJson(JSON.stringify(next, null, 2));
-      const selected = next.cameraTopology?.selectedRearLogicalCameraId;
+      const selected = next.cameraTopology?.selectedRearCameraId;
       if (selected && selected !== cameraId) {
         setMessage(
           'The selected rear camera changed while the preview was mounted. Inspect again, then rerun after the preview restarts.',
@@ -159,7 +159,7 @@ export default function BalancedCompatibilityProbeScreen() {
   }
 
   const classification = report?.classification;
-  const selectedCamera = inventory?.cameraTopology?.selectedRearLogicalCameraId;
+  const selectedCamera = inventory?.cameraTopology?.selectedRearCameraId;
   const readyToRun =
     previewStatus === 'preview-ready' &&
     inventory?.staticEvaluation?.requiredContractPassed === true &&
@@ -280,14 +280,14 @@ function InventoryCard({
   inventory: BalancedCompatibilityInventory | null;
 }) {
   if (!inventory?.staticEvaluation) return null;
-  const camera = inventory.cameraTopology?.selectedRearLogicalCameraId ?? 'none';
+  const camera = inventory.cameraTopology?.selectedRearCameraId ?? 'none';
   return (
     <View style={styles.card}>
       <Text style={styles.sectionTitle}>STATIC CONTRACT</Text>
       <Text style={styles.cardTitle}>
         {inventory.staticEvaluation.requiredContractPassed ? 'Static contract passed' : 'Static contract limited'}
       </Text>
-      <Text style={styles.body}>Selected rear logical camera: {camera}</Text>
+      <Text style={styles.body}>Selected rear camera: {camera}</Text>
       {inventory.staticEvaluation.reasons.map((reason) => (
         <Text key={reason} style={styles.reason}>
           • {reason}
