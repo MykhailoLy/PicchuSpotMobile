@@ -1,0 +1,7 @@
+interface:
+  display_name: PicchuSpot Mobile Verification
+  short_description: Scope-aware checks and honest native acceptance
+  default_prompt: Use $picchuspot-mobile-verification to review this change and report actual checks, device evidence and
+    remaining blockers. Do not merge.
+policy:
+  allow_implicit_invocation: true

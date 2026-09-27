@@ -184,6 +184,19 @@ Do not modify these unless the task explicitly requires it and the user has appr
 
 Never expose service-role keys, API secrets, tokens, private environment values, or customer data.
 
+## Task-specific agent skills
+
+Use the matching repo-local workflow; do not load all skills for every task:
+
+- Native screen/component design, gallery UI, forms or accessibility: [picchuspot-mobile-ui](.agents/skills/picchuspot-mobile-ui/SKILL.md).
+- Build/compiler/Metro/ADB problems, native camera bugs or measured performance: [picchuspot-mobile-debugging](.agents/skills/picchuspot-mobile-debugging/SKILL.md).
+- Shoot/photo filesystem and SQLite ownership, recovery or local draft state: [picchuspot-offline-media](.agents/skills/picchuspot-offline-media/SKILL.md).
+- Change/PR acceptance and handoff: [picchuspot-mobile-verification](.agents/skills/picchuspot-mobile-verification/SKILL.md). Docs/skill-only changes use its documentation checks, not a claim of native verification.
+
+Read these files directly if the client has no skill selector. Skills remain subordinate to the task's scope, these repository rules and higher-priority instructions; they do not authorize production writes, new services, destructive cleanup or merging. Keep reviews read-only unless fixes are requested.
+
+Source selection, usage and unexecuted client acceptance prompts: [Agent skills](docs/agent-skills.md).
+
 ## Code quality
 
 Preserve the existing Expo Router structure and current design direction.

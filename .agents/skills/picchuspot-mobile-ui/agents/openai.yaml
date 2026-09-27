@@ -1,0 +1,7 @@
+interface:
+  display_name: PicchuSpot Mobile UI
+  short_description: Native screens, service forms and brand consistency
+  default_prompt: Use $picchuspot-mobile-ui for the requested PicchuSpotMobile screen change. Preserve existing architecture,
+    brand and protected boundaries.
+policy:
+  allow_implicit_invocation: true
