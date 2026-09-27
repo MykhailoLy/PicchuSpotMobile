@@ -1,0 +1,7 @@
+interface:
+  display_name: PicchuSpot Mobile Debugging
+  short_description: Trace native, build and performance failures
+  default_prompt: Use $picchuspot-mobile-debugging to reproduce the reported failure, identify its causal boundary and propose
+    or implement only the authorized fix.
+policy:
+  allow_implicit_invocation: true

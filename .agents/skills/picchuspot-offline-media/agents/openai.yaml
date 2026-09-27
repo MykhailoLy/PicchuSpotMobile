@@ -1,0 +1,7 @@
+interface:
+  display_name: PicchuSpot Offline Media
+  short_description: Protect local Shoots, photos and draft ownership
+  default_prompt: Use $picchuspot-offline-media for this local data task. Preserve SQLite authority, owned files and existing
+    user data; do not extend scope to production services.
+policy:
+  allow_implicit_invocation: true
