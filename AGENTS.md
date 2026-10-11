@@ -192,6 +192,7 @@ Use the matching repo-local workflow; do not load all skills for every task:
 - Build/compiler/Metro/ADB problems, native camera bugs or measured performance: [picchuspot-mobile-debugging](.agents/skills/picchuspot-mobile-debugging/SKILL.md).
 - Shoot/photo filesystem and SQLite ownership, recovery or local draft state: [picchuspot-offline-media](.agents/skills/picchuspot-offline-media/SKILL.md).
 - Change/PR acceptance and handoff: [picchuspot-mobile-verification](.agents/skills/picchuspot-mobile-verification/SKILL.md). Docs/skill-only changes use its documentation checks, not a claim of native verification.
+- English-language user-facing copy: [stop-slop](.agents/skills/stop-slop/SKILL.md). Preserve facts and author voice; not for code or non-English content.
 
 Read these files directly if the client has no skill selector. Skills remain subordinate to the task's scope, these repository rules and higher-priority instructions; they do not authorize production writes, new services, destructive cleanup or merging. Keep reviews read-only unless fixes are requested.
 
