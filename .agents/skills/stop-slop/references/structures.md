@@ -2,7 +2,7 @@
 
 ## Binary Contrasts
 
-These create false drama. State the point directly.
+These can create false drama when repeated mechanically. Keep a meaningful contrast that strengthens clarity.
 
 | Pattern | Problem |
 |---------|---------|
@@ -18,7 +18,7 @@ These create false drama. State the point directly.
 | "is about X but not Y" | False distinction |
 | "not just X but also Y" | Additive hedge |
 
-**Instead:** State Y directly. "The problem is Y." "Y matters here." Drop the negation entirely.
+**Instead:** State Y directly when that preserves meaning. Keep the contrast if the difference itself matters.
 
 ## Negative Listing
 
@@ -113,16 +113,16 @@ Every sentence needs a subject doing something. Passive voice hides the actor an
 | Paragraphs starting with "So" | Start with content |
 | Sentences starting with "Look," | Remove |
 
-Wh- openers become a crutch. "What makes this hard is..." becomes "The constraint is..." or better, name the specific constraint.
+Wh- openers are a crutch only when they announce rather than ask. Keep genuine questions and meaningful explanations.
 
 ## Rhythm Patterns
 
 | Pattern | Fix |
 |---------|-----|
-| Three-item lists | Use two items or one |
+| Automatic three-item lists | Remove filler items but keep every meaningful item |
 | Questions answered immediately | Let questions breathe or cut them |
 | Every paragraph ends punchily | Vary endings |
-| Em-dashes | Remove. Use commas or periods. No em dashes at all. |
+| Repetitive em-dashes | Prefer commas or periods when clearer; keep useful em dashes |
 | Staccato fragmentation | Don't stack short punchy sentences |
 | "Not always. Not perfectly." | Hedging disguised as reassurance |
 
@@ -131,4 +131,4 @@ Wh- openers become a crutch. "What makes this hard is..." becomes "The constrain
 | Pattern | Problem |
 |---------|---------|
 | Lazy extremes (every, always, never, everyone, everybody, nobody) | False authority. Use specifics instead of sweeping claims. |
-| All adverbs (-ly words, "really," "just," "literally," "genuinely," "honestly," "simply," "actually") | Empty emphasis. See phrases.md for full list. |
+| Unnecessary intensifiers (e.g. "really," "just," "literally") | Remove only if they add no meaning; preserve qualifiers. See phrases.md. |

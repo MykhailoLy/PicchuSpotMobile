@@ -4,7 +4,7 @@ Reviewed: **2026-09-27**. Initial code baseline: `37f9895807f6aeb73a60e1d2831608
 
 ## What is installed
 
-Four **original, project-owned workflows**, informed by the reviewed sources below and the existing repository contracts. These are not unmodified official Expo/Callstack packages, do not represent upstream endorsement and do not install the LobeHub marketplace client.
+Four **original, project-owned workflows** plus an imported English-language prose editor. The four original workflows are informed by the reviewed sources below and the existing repository contracts. These are not unmodified official Expo/Callstack packages, do not represent upstream endorsement and do not install the LobeHub marketplace client.
 
 | Skill | Purpose | Explicit invocation |
 | --- | --- | --- |
@@ -12,6 +12,7 @@ Four **original, project-owned workflows**, informed by the reviewed sources bel
 | [Mobile debugging](../.agents/skills/picchuspot-mobile-debugging/SKILL.md) | Compiler/build/Metro/Camera2/lifecycle issues and measured performance | `$picchuspot-mobile-debugging` |
 | [Offline media](../.agents/skills/picchuspot-offline-media/SKILL.md) | SQLite/filesystem ownership, failure recovery and local draft boundaries | `$picchuspot-offline-media` |
 | [Mobile verification](../.agents/skills/picchuspot-mobile-verification/SKILL.md) | Task-specific checks, native QA, release isolation and truthful handoff | `$picchuspot-mobile-verification` |
+| [Stop Slop](../.agents/skills/stop-slop/SKILL.md) | Review English captions, emails and other prose; not source code | `$stop-slop` |
 
 The root [AGENTS.md](../AGENTS.md) remains the repository-wide authority under higher-priority instructions. Load only matching workflows, not the entire collection for every question. Skills do not grant credentials, tools, extra permissions, subscriptions or approval for production changes. They do not fix an app simply by being present.
 
@@ -54,7 +55,9 @@ The user supplied [LobeHub UI search](https://lobehub.com/ru/skills?q=UI). Its l
 | [LobeHub UI/UX Pro Max listing](https://lobehub.com/skills/nextlevelbuilder-ui-ux-pro-max-skill-ui-ux-pro-max) | Listing reviewed, not a full source/script/license audit | Not installed. Broad style/palette/stack selection is unnecessary for a fixed-brand native app; this is a fit decision, not a security verdict. |
 | Web-only UI listings (Nuxt, MUI, shadcn) | Seen in the supplied UI search | Not selected as native screen implementation rules. No web-to-native migration is requested. |
 
-The selected manifests were reviewed, not every file in their repositories. No upstream code example, complete skill body, asset, script or license text is vendored. These independently written local workflows use the repository's existing license. A future direct import of upstream files must retain its actual license/notices and be reviewed/pinned separately; do not automatically sync from `main` or run a marketplace installer.
+The selected Expo/Callstack manifests were reviewed, not every file in their repositories. The four original local workflows are independently written and do not vendor upstream skill bodies, assets or scripts.
+
+**New imported skill (2026-10-11):** [Stop Slop](https://github.com/hardikpandya/stop-slop/tree/8da1f030185bdfe8471220585162991eaeb970e9), exact revision `8da1f030185bdfe8471220585162991eaeb970e9`, licensed MIT. Source skill, rules, reference examples and license are vendored at [`.agents/skills/stop-slop/`](../.agents/skills/stop-slop/SKILL.md). The `SKILL.md`, reference rules and examples are adapted to preserve facts, qualifiers, the author's voice and natural English; the unmodified full MIT license remains in `LICENSE`. Use only as an English-language repository agent editor, not app runtime. Do not auto-sync from `main` or run a marketplace installer. Any future direct import must retain its actual license/notices and pin the upstream revision.
 
 Primary local sources are AGENTS, `docs/product-architecture.md`, `docs/capture-model.md`, `docs/android-local-persistence.md`, `docs/camera/*`, the current Quick hook/theme, and SQLite/filesystem helpers. The audit and competitor-guide addendum in PR #21 remain separate, unmerged reference work at creation time. These skills neither merge that PR nor turn its proposals into implementation approval. No PDF, competitor artwork or private photo is copied into this set.
 

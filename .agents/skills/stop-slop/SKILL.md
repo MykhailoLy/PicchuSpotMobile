@@ -1,8 +1,9 @@
 ---
 name: stop-slop
-description: "Review or draft user-facing prose, posts, captions, articles, marketing copy and messages to reduce formulaic AI phrasing while preserving voice and facts. Do not invoke for code-only tasks."
+description: "Draft, edit or review English-language prose, social posts, captions, marketing copy or messages to reduce formulaic AI phrasing while preserving factual meaning and voice. Not for code or non-English prose."
 metadata:
   source: https://github.com/hardikpandya/stop-slop
+  source_revision: "8da1f030185bdfe8471220585162991eaeb970e9"
   license: MIT
   adapted: "Editorial guardrails for cross-project use"
 ---
@@ -12,9 +13,11 @@ metadata:
 ## Scope and precedence for this installation
 
 This is an **adaptation** of Hardik Pandya's Stop Slop skill for use across different repositories.
-Use it selectively for human-facing prose: social posts and replies, marketing copy, emails, articles,
-landing-page copy, and conversational documentation. Do not apply it to source code, exact API or
-schema identifiers, logs, commands, tests, or technical strings simply to satisfy a writing rule.
+Use it selectively for **English-language** human-facing prose: social posts and replies, marketing
+copy, emails, articles, landing-page copy, and conversational documentation. The pattern checks are
+English-specific; for non-English writing, use suitable language-specific guidance instead.
+Do not apply it to source code, exact API or schema identifiers, logs, commands, tests, or technical
+strings simply to satisfy a writing rule.
 
 **Project instructions, verified facts, the author's intent, accuracy, accessibility, and the target
 platform's requirements take precedence over this skill.** Never invent personal experience,
@@ -32,42 +35,42 @@ revise only the affected parts; verify facts and voice; return the clean result.
 and Reddit, prefer a natural conversation over a sales pitch, and comply with community norms.
 The skill does not authorize automated posting, replies, or any external account action.
 
-**Attribution:** Adapted from [hardikpandya/stop-slop](https://github.com/hardikpandya/stop-slop), MIT.
-The supporting reference files are reproduced from the source. See [LICENSE](LICENSE).
+**Attribution:** Adapted from [hardikpandya/stop-slop at 8da1f030185b](https://github.com/hardikpandya/stop-slop/tree/8da1f030185bdfe8471220585162991eaeb970e9), MIT.
+The skill and reference material are modified to preserve meaning and factual qualifiers; see [LICENSE](LICENSE).
 
 Eliminate predictable AI writing patterns from prose.
 
 ## Core Rules
 
-1. **Cut filler phrases.** Remove throat-clearing openers, emphasis crutches, and all adverbs. See [references/phrases.md](references/phrases.md).
+1. **Cut filler phrases.** Remove throat-clearing openers, empty emphasis and unnecessary adverbs. Preserve informative qualifiers. See [references/phrases.md](references/phrases.md).
 
-2. **Break formulaic structures.** Avoid binary contrasts, negative listings, dramatic fragmentation, rhetorical setups, false agency. See [references/structures.md](references/structures.md).
+2. **Break formulaic structures.** Review mechanical contrasts, negative listings, dramatic fragmentation, empty rhetorical setups and confusing agency. Keep meaningful contrasts. See [references/structures.md](references/structures.md).
 
-3. **Use active voice.** Every sentence needs a human subject doing something. No passive constructions. No inanimate objects performing human actions ("the complaint becomes a fix").
+3. **Prefer clear agency.** Use active voice when it reveals who acted. Keep natural passive voice when the actor is unknown, irrelevant or deliberately backgrounded. Natural metaphors are fine.
 
 4. **Be specific.** No vague declaratives ("The reasons are structural"). Name the specific thing. No lazy extremes ("every," "always," "never") doing vague work.
 
-5. **Put the reader in the room.** No narrator-from-a-distance voice. "You" beats "People." Specifics beat abstractions.
+5. **Be concrete.** Favor specific experience over vague generalizations. Do not force "you" into every sentence.
 
-6. **Vary rhythm.** Mix sentence lengths. Two items beat three. End paragraphs differently. No em dashes.
+6. **Vary rhythm.** Mix sentence lengths and paragraph endings. Three-item lists and em dashes are acceptable where they improve communication.
 
 7. **Trust readers.** State facts directly. Skip softening, justification, hand-holding.
 
-8. **Cut quotables.** If it sounds like a pull-quote, rewrite it.
+8. **Avoid manufactured quotables.** Keep concise, memorable wording if it genuinely expresses the author's point.
 
 ## Quick Checks
 
 Before delivering prose:
 
-- Any adverbs? Kill them.
-- Any passive voice? Find the actor, make them the subject.
-- Inanimate thing doing a human verb ("the decision emerges")? Name the person.
-- Sentence starts with a Wh- word? Restructure it.
+- Any filler adverbs? Remove those adding no meaning; retain factual degree or uncertainty.
+- Any passive voice obscuring a relevant actor? Name the actor when known.
+- Confusing false agency ("the decision emerges")? Clarify who acted when relevant.
+- Empty Wh- opener? Restructure only formulaic setups; keep genuine questions.
 - Any "here's what/this/that" throat-clearing? Cut to the point.
-- Any "not X, it's Y" contrasts? State Y directly.
-- Three consecutive sentences match length? Break one.
-- Paragraph ends with punchy one-liner? Vary it.
-- Em-dash anywhere? Remove it.
+- Repetitive "not X, it's Y" contrast? Keep it if the distinction itself is useful.
+- Monotonous run of similarly sized sentences? Vary rhythm if helpful.
+- Each paragraph ends in a forced punch line? Break the pattern.
+- Overused em dashes? Replace only those that hurt clarity.
 - Vague declarative ("The implications are significant")? Name the specific implication.
 - Narrator-from-a-distance ("Nobody designed this")? Put the reader in the scene.
 - Meta-joiners ("The rest of this essay...")? Delete. Let the essay move.
@@ -84,7 +87,7 @@ Rate 1-10 on each dimension:
 | Authenticity | Sounds human? |
 | Density | Anything cuttable? |
 
-Below 35/50: revise.
+Below 35/50: consider improving weak dimensions. Do not rewrite accurate natural prose solely to improve the score.
 
 ## Examples
 

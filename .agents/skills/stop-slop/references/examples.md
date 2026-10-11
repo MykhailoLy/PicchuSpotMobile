@@ -1,5 +1,7 @@
 # Before/After Examples
 
+These examples illustrate stylistic cleanup, not fact-checking. Preserve the original claim, degree of certainty, quantifiers and intent. Check unsupported claims before publication.
+
 ## Example 1: Throat-Clearing + Binary Contrast
 
 **Before:**
@@ -18,9 +20,9 @@
 > "It turns out that most teams struggle with alignment. The uncomfortable truth is that nobody wants to admit they're confused. And that's okay."
 
 **After:**
-> "Teams struggle with alignment. Nobody admits confusion."
+> "Most teams struggle with alignment. Nobody wants to admit they're confused."
 
-**Changes:** Cut hedging ("most"), removed throat-clearing phrases, deleted permission-granting ending.
+**Changes:** Removed filler and unnecessary reassurance while preserving "most" and the statement about reluctance to admit confusion.
 
 ---
 
@@ -30,9 +32,9 @@
 > "In today's fast-paced landscape, we need to lean into discomfort and navigate uncertainty with clarity. This matters because your competition isn't waiting."
 
 **After:**
-> "Move faster. Your competition is."
+> "We need to face discomfort and handle uncertainty with clarity. Our competitors aren't waiting."
 
-**Changes:** Eliminated jargon entirely. Core message in six words.
+**Changes:** Replaced jargon while preserving discomfort, uncertainty, clarity and competition as substantive points.
 
 ---
 

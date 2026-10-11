@@ -52,9 +52,9 @@ Replace with plain language.
 
 ## Adverbs
 
-Kill all adverbs. No -ly words. No softeners, no intensifiers, no hedges.
+Review adverbs for empty emphasis rather than banning -ly words. Keep meaningful degree, time, likelihood and evidence-backed qualifications.
 
-Specific offenders:
+Frequent candidates for removal when they add nothing:
 
 - "really"
 - "just"
